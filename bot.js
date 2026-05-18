@@ -43,6 +43,15 @@ app.post('/webhook', middleware(config), async (req, res) => {
           text: `このグループのID: ${event.source.groupId}`,
         });
       }
+      // スタンプID調査用: グループでスタンプを送るとIDをログ出力&返信
+      if (event.type === 'message' && event.message?.type === 'sticker') {
+        const { packageId, stickerId } = event.message;
+        console.log('STICKER:', { packageId, stickerId });
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `packageId: ${packageId}\nstickerId: ${stickerId}`,
+        });
+      }
     }
     res.status(200).end();
   } catch (e) {
@@ -62,8 +71,7 @@ app.post('/api/notify-new-month', auth, async (req, res) => {
     `▼ 入力サイト`,
     SITE_URL,
     '',
-    '締切: 今月22日',
-    '各自で入力をお願いします。'
+    '締切: 今月21日までです。'
   ].join('\n');
   await client.pushMessage(GROUP_ID, { type: 'text', text: message });
   res.json({ ok: true, ym, message });
@@ -104,7 +112,8 @@ app.post('/api/send-reminder', auth, async (req, res) => {
 });
 
 // ============================================================
-// 締切後の強リマインド (22日以降、未回答者がいる限り 1日おき)
+// 締切後の強リマインド (22日以降、未回答者がいる限り毎日)
+// 22-23日: 通常の強リマインド / 24日以降: 激つよモード + 怒スタンプ
 // POST /api/send-final-reminder  Header: x-admin-token
 // ============================================================
 app.post('/api/send-final-reminder', auth, async (req, res) => {
@@ -122,6 +131,29 @@ app.post('/api/send-final-reminder', auth, async (req, res) => {
     return res.json({ ok: true, message: '全員回答済み', sent: false });
   }
 
+  const jstDay = jstDayOfMonth();
+  const angryMode = jstDay >= 24;
+
+  if (angryMode) {
+    const message = [
+      `💢💢💢`,
+      '',
+      `何回言わせるんですか?`,
+      `${ym.replace('-', '年')}月分のシフト、まだ ${remaining} 名足りていません。`,
+      '',
+      'Botを舐めるな。',
+      '即刻入力しなさい。',
+      '',
+      SITE_URL,
+    ].join('\n');
+    // 怒スタンプを同梱 (LINE標準スタンプ: Brown激怒)
+    await client.pushMessage(GROUP_ID, [
+      { type: 'text', text: message },
+      { type: 'sticker', packageId: '11537', stickerId: '52002773' },
+    ]);
+    return res.json({ ok: true, remaining, sent: true, mode: 'angry', message });
+  }
+
   const message = [
     `⚠️ シフト入力の締切を過ぎています`,
     '',
@@ -133,7 +165,7 @@ app.post('/api/send-final-reminder', auth, async (req, res) => {
   ].join('\n');
 
   await client.pushMessage(GROUP_ID, { type: 'text', text: message });
-  res.json({ ok: true, remaining, sent: true, message });
+  res.json({ ok: true, remaining, sent: true, mode: 'normal', message });
 });
 
 // ============================================================
@@ -229,16 +261,35 @@ function formatDecidedShiftMessage(dec, ym, postCount = 1) {
     ? `🔄 ${ym.replace('-', '年')}月のシフトを修正しました (${postCount}回目)`
     : `✅ ${ym.replace('-', '年')}月のシフトが確定しました`;
   const lines = [header, ''];
+  // 週の始まり (月曜) で空行を入れるため、前の日付の「週のキー」を覚えておく
+  const weekKey = (date) => {
+    const dt = new Date(date);
+    const monday = new Date(dt);
+    monday.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+    return monday.toISOString().slice(0, 10);
+  };
+  let prevWeek = null;
   Object.keys(byDate).sort().forEach(date => {
     const [, m, d] = date.split('-');
-    const w = '日月火水木金土'[new Date(date).getDay()];
-    lines.push(`${parseInt(m)}/${parseInt(d)} (${w})`);
-    ['am','noon','pm'].forEach(slot => {
-      const names = byDate[date][slot];
-      if (names && names.length) lines.push(`  ${slotLabel[slot]}: ${names.join(', ')}`);
-    });
-    lines.push('');
+    const dow = new Date(date).getDay();    // 0=日 ... 6=土
+    const w = '日月火水木金土'[dow];
+    const wk = weekKey(date);
+    if (prevWeek !== null && wk !== prevWeek) lines.push('');
+    prevWeek = wk;
+    if (dow === 6) {
+      // 土曜: 午前/正午/午後 が独立スロット
+      lines.push(`${parseInt(m)}/${parseInt(d)} (${w})`);
+      ['am','noon','pm'].forEach(slot => {
+        const names = byDate[date][slot];
+        if (names && names.length) lines.push(`  ${slotLabel[slot]}: ${names.join(', ')}`);
+      });
+    } else {
+      // 平日: pm のみなので1行に圧縮 (ラベル省略)
+      const pmNames = byDate[date].pm || [];
+      lines.push(`${parseInt(m)}/${parseInt(d)} (${w}) ${pmNames.join(', ')}`.trimEnd());
+    }
   });
+  lines.push('');
   if (dec.shift_count) {
     lines.push('───── 個人別 ─────');
     Object.entries(dec.shift_count)
@@ -263,6 +314,13 @@ function nextYearMonth() {
   let y = now.getFullYear(), m = now.getMonth() + 2;
   if (m > 12) { m -= 12; y++; }
   return `${y}-${String(m).padStart(2,'0')}`;
+}
+
+// JST (UTC+9) の「今日が何日か」を返す
+function jstDayOfMonth() {
+  const now = new Date();
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return jst.getUTCDate();
 }
 
 function chunkText(text, maxLen) {

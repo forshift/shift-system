@@ -411,7 +411,7 @@ function App() {
 
   // 月別設定
   const [config, setConfig] = useState(() => storage.load(`shift_config_${ymKey}`, {
-    studyDays: [getThirdThursday(nextYear, nextMonth)].filter(Boolean),
+    studyDays: [],
     extraHolidays: [],
     removedHolidays: [],
     totalPeople: 10

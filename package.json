@@ -1,0 +1,16 @@
+{
+  "name": "shift-line-bot",
+  "version": "1.0.0",
+  "description": "Shift decision system LINE bot",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node --watch bot.js"
+  },
+  "dependencies": {
+    "@line/bot-sdk": "^9.0.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.0"
+  }
+}

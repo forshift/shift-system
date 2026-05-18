@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>シフト決定システム</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --bg-card: #fbf9f3;
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-muted: #8a8478;
+    --accent: #b23a3a;
+    --accent-soft: #d4a5a5;
+    --line: #d8d2c4;
+    --line-strong: #b8b2a4;
+    --ok: #2d6a4f;
+    --warn: #c77b2e;
+    --select: #f5e6c4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: 'Noto Sans JP', sans-serif; font-weight: 400; line-height: 1.6; }
+  body { min-height: 100vh; padding: 24px 16px 80px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1, h2, h3 { font-family: 'Shippori Mincho', serif; font-weight: 700; letter-spacing: 0.02em; }
+  h1 { font-size: 28px; margin-bottom: 4px; }
+  h2 { font-size: 19px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  h2::before { content: ''; width: 4px; height: 18px; background: var(--accent); display: inline-block; }
+  h3 { font-size: 15px; margin-bottom: 10px; color: var(--ink-soft); }
+  .subtitle { color: var(--ink-muted); font-size: 13px; margin-bottom: 32px; letter-spacing: 0.05em; }
+  .card { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 24px; margin-bottom: 20px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  input[type="text"], input[type="number"], input[type="date"], select {
+    font-family: inherit; font-size: 14px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 3px; background: white; color: var(--ink); min-width: 140px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent-soft); outline-offset: -1px; border-color: var(--accent); }
+  button { font-family: inherit; font-size: 14px; padding: 8px 16px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg-card); cursor: pointer; border-radius: 3px; transition: all 0.15s; font-weight: 500; }
+  button:hover { background: var(--accent); border-color: var(--accent); }
+  button.ghost { background: transparent; color: var(--ink); }
+  button.ghost:hover { background: var(--ink); color: var(--bg-card); }
+  button.danger { background: transparent; color: var(--accent); border-color: var(--accent); }
+  button.danger:hover { background: var(--accent); color: white; }
+  button.small { padding: 4px 10px; font-size: 12px; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  label { font-size: 13px; color: var(--ink-soft); font-weight: 500; letter-spacing: 0.03em; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: white; border: 1px solid var(--line-strong); border-radius: 999px; font-size: 13px; }
+  .pill button { padding: 0; background: none; border: none; color: var(--ink-muted); font-size: 16px; line-height: 1; }
+  .pill button:hover { color: var(--accent); background: none; }
+  .name-pill { background: var(--select); border: 1px solid var(--line-strong); padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 14px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 8px; }
+  .name-pill:hover { background: var(--accent-soft); }
+  .name-pill.active { background: var(--ink); color: var(--bg-card); border-color: var(--ink); }
+  .name-pill .del { color: var(--ink-muted); font-size: 14px; cursor: pointer; padding: 0 2px; }
+  .name-pill .del:hover { color: var(--accent); }
+  .name-pill.active .del { color: var(--bg-card); opacity: 0.7; }
+  .calendar { border-collapse: separate; border-spacing: 0; width: 100%; background: white; border: 1px solid var(--line-strong); }
+  .calendar th { background: var(--ink); color: var(--bg-card); padding: 10px 4px; font-size: 12px; font-weight: 500; letter-spacing: 0.1em; border-right: 1px solid var(--ink-soft); }
+  .calendar th:last-child { border-right: none; }
+  .calendar th.sat { color: #9bc3e8; }
+  .calendar th.sun { color: var(--accent-soft); }
+  .calendar td { vertical-align: top; border: 1px solid var(--line); padding: 4px; height: 88px; width: 14.28%; background: white; position: relative; }
+  .calendar td.empty { background: var(--bg); }
+  .calendar td.excluded { background: #ede8db; color: var(--ink-muted); }
+  .date-num { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink-soft); font-weight: 500; }
+  .date-num.sat { color: #3a7ab2; }
+  .date-num.sun { color: var(--accent); }
+  .excluded-label { font-size: 10px; color: var(--ink-muted); font-style: italic; margin-top: 4px; }
+  .slot { display: flex; align-items: center; justify-content: space-between; margin-top: 3px; padding: 2px 5px; background: var(--bg); border-radius: 2px; cursor: pointer; font-size: 11px; transition: all 0.1s; user-select: none; }
+  .slot:hover { background: var(--select); }
+  .slot-label { color: var(--ink-soft); font-size: 10px; font-weight: 500; letter-spacing: 0.04em; }
+  .slot-mark { font-size: 14px; line-height: 1; font-weight: 700; }
+  .slot-mark.circle { color: var(--ok); }
+  .slot-mark.triangle { color: var(--warn); }
+  .slot-mark.cross { color: var(--accent); opacity: 0.5; }
+  .read-only .slot { cursor: default; }
+  .read-only .slot:hover { background: var(--bg); }
+  .combined-cell { font-size: 10px; padding: 2px 4px; line-height: 1.3; }
+  .combined-cell .slot-line { display: flex; gap: 4px; align-items: baseline; }
+  .combined-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 28px; }
+  .combined-cell .name-tag { font-size: 9px; padding: 1px 4px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin-right: 2px; }
+  .name-tag.circle { background: #d8ebd8; color: var(--ok); }
+  .name-tag.triangle { background: #f3e2c8; color: var(--warn); }
+  .name-tag.cross { background: #f0d8d8; color: var(--accent); }
+  .decided-cell { padding: 4px 5px; }
+  .decided-cell .slot-line { display: flex; gap: 4px; margin-top: 2px; font-size: 11px; }
+  .decided-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 32px; }
+  .decided-cell .assigned-name { background: var(--select); padding: 1px 6px; border-radius: 2px; color: var(--ink); font-weight: 500; }
+  .month-header { text-align: center; font-family: 'Shippori Mincho', serif; font-size: 22px; margin: 24px 0 12px; letter-spacing: 0.1em; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--ink-soft); margin-bottom: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-mark { font-weight: 700; font-size: 14px; }
+  .summary-box { background: white; border: 1px solid var(--line); padding: 16px; border-radius: 3px; margin-bottom: 12px; }
+  .summary-name { font-family: 'Shippori Mincho', serif; font-size: 16px; margin-bottom: 6px; }
+  .summary-dates { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink-soft); line-height: 1.8; }
+  .summary-count { display: inline-block; margin-left: 8px; padding: 2px 8px; background: var(--ink); color: var(--bg-card); border-radius: 999px; font-size: 11px; font-family: 'Noto Sans JP', sans-serif; }
+  .empty-state { color: var(--ink-muted); font-style: italic; font-size: 13px; padding: 8px 0; }
+  .submit-bar { display: flex; gap: 12px; justify-content: flex-end; padding-top: 8px; }
+  .submit-bar button { padding: 12px 28px; font-size: 15px; }
+  .warning { background: #fdf3e7; border: 1px solid var(--warn); color: var(--warn); padding: 12px 16px; border-radius: 3px; font-size: 13px; margin-bottom: 16px; }
+  .info { background: #e8f0f5; border: 1px solid #7da7c8; color: #2c5a82; padding: 12px 16px; border-radius: 3px; font-size: 13px; margin-bottom: 16px; }
+  .topbar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .progress { font-size: 13px; color: var(--ink-muted); font-family: 'JetBrains Mono', monospace; }
+  .ornament { text-align: center; color: var(--ink-muted); font-size: 18px; margin: 8px 0 32px; letter-spacing: 1em; }
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--ink); margin-bottom: 0; }
+  .tab { padding: 10px 20px; cursor: pointer; border: 1px solid var(--line); border-bottom: none; background: var(--bg); font-size: 13px; font-weight: 500; }
+  .tab.active { background: var(--ink); color: var(--bg-card); border-color: var(--ink); }
+  details { background: white; border: 1px solid var(--line); border-radius: 3px; padding: 12px 16px; margin-bottom: 12px; }
+  details summary { cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink-soft); user-select: none; }
+  details[open] summary { margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat { background: white; padding: 12px 16px; border: 1px solid var(--line); }
+  .stat-label { font-size: 11px; color: var(--ink-muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .stat-value { font-family: 'Shippori Mincho', serif; font-size: 22px; margin-top: 2px; }
+  hr { border: none; border-top: 1px dashed var(--line-strong); margin: 20px 0; }
+  @media (max-width: 700px) {
+    body { padding: 16px 8px 60px; }
+    .card { padding: 16px; }
+    .calendar td { height: 70px; padding: 2px; }
+    .slot { font-size: 10px; padding: 1px 3px; }
+    .slot-label { font-size: 9px; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<!-- Supabase (オプション): セットアップ後にコメント解除 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useMemo, useCallback } = React;
+
+// ============================================================
+// 設定: Supabaseを使う場合はここを編集
+// ============================================================
+const SUPABASE_URL = "https://boxjmdbbqlvlzokuqrzi.supabase.co";   // 例: "https://xxxxx.supabase.co"
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJveGptZGJicWx2bHpva3VxcnppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNzc5MjksImV4cCI6MjA5NDY1MzkyOX0.WdvVotKAtwWzCTkX_s181vnjx0883nTtmE2VNQ2NleQ";   // anon key
+const USE_SUPABASE = true; // trueにするとSupabaseを利用 (上のscriptタグも有効化)
+
+// ============================================================
+// 日本の祝日データ (内閣府CSV由来; 1年ごとに更新可能)
+// 出典: https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv
+// ============================================================
+const HOLIDAYS = {
+  "2025-01-01": "元日","2025-01-13": "成人の日","2025-02-11": "建国記念の日",
+  "2025-02-23": "天皇誕生日","2025-02-24": "振替休日","2025-03-20": "春分の日",
+  "2025-04-29": "昭和の日","2025-05-03": "憲法記念日","2025-05-04": "みどりの日",
+  "2025-05-05": "こどもの日","2025-05-06": "振替休日","2025-07-21": "海の日",
+  "2025-08-11": "山の日","2025-09-15": "敬老の日","2025-09-23": "秋分の日",
+  "2025-10-13": "スポーツの日","2025-11-03": "文化の日","2025-11-23": "勤労感謝の日",
+  "2025-11-24": "振替休日",
+  "2026-01-01": "元日","2026-01-12": "成人の日","2026-02-11": "建国記念の日",
+  "2026-02-23": "天皇誕生日","2026-03-20": "春分の日","2026-04-29": "昭和の日",
+  "2026-05-03": "憲法記念日","2026-05-04": "みどりの日","2026-05-05": "こどもの日",
+  "2026-05-06": "振替休日","2026-07-20": "海の日","2026-08-11": "山の日",
+  "2026-09-21": "敬老の日","2026-09-22": "国民の休日","2026-09-23": "秋分の日",
+  "2026-10-12": "スポーツの日","2026-11-03": "文化の日","2026-11-23": "勤労感謝の日",
+  "2027-01-01": "元日"
+};
+
+// ============================================================
+// ユーティリティ
+// ============================================================
+const pad = (n) => String(n).padStart(2, '0');
+const fmtDate = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+const parseDate = (s) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const daysInMonth = (y, m) => new Date(y, m, 0).getDate();
+const getNextMonth = () => {
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth() + 2;
+  if (m > 12) { m -= 12; y++; }
+  return { year: y, month: m };
+};
+const SLOTS_WEEKDAY = ['pm'];
+const SLOTS_SATURDAY = ['am', 'noon', 'pm'];
+const SLOT_LABEL = { am: '午前', noon: '正午', pm: '午後' };
+const SLOT_CAPACITY = { am_sat: 1, noon_sat: 1, pm_sat: 2, pm_weekday: 2 };
+
+const getThirdThursday = (year, month) => {
+  let count = 0;
+  for (let d = 1; d <= daysInMonth(year, month); d++) {
+    const date = new Date(year, month - 1, d);
+    if (date.getDay() === 4) { count++; if (count === 3) return fmtDate(year, month, d); }
+  }
+  return null;
+};
+
+const cycleMark = (m) => m === 'cross' ? 'circle' : m === 'circle' ? 'triangle' : 'cross';
+const markChar = (m) => m === 'circle' ? '◯' : m === 'triangle' ? '△' : '✕';
+
+// ============================================================
+// ストレージ抽象化 (localStorage または Supabase)
+// ============================================================
+const storage = {
+  load: (key, fallback) => {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch { return fallback; }
+  },
+  save: (key, value) => {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  }
+};
+
+// Supabase wrapper (USE_SUPABASE=true の場合に使用)
+// 簡略化のためテーブル構造は schema.sql を参照
+const supabaseClient = (USE_SUPABASE && window.supabase)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
+
+async function loadStateFromBackend(yearMonth) {
+  // Supabase連携サンプル: 実運用ではこの関数を完成させる
+  if (!supabaseClient) return null;
+  const { data: names } = await supabaseClient.from('names').select('name').order('created_at');
+  const { data: cfg } = await supabaseClient.from('month_config').select('*').eq('year_month', yearMonth).maybeSingle();
+  const { data: resps } = await supabaseClient.from('responses').select('*').eq('year_month', yearMonth);
+  const { data: dec } = await supabaseClient.from('decisions').select('*').eq('year_month', yearMonth).maybeSingle();
+  return { names: (names||[]).map(n=>n.name), config: cfg||null, responses: resps||[], decision: dec?.shift_data||null };
+}
+
+async function saveResponseToBackend(yearMonth, name, response) {
+  if (!supabaseClient) return;
+  await supabaseClient.from('responses').upsert({
+    year_month: yearMonth, name,
+    answers: response.answers, max_per_week: response.maxPerWeek, saturday_pref: response.saturdayPref
+  }, { onConflict: 'year_month,name' });
+}
+
+// ============================================================
+// シフト決定アルゴリズム
+// ============================================================
+function decideShifts(year, month, validDates, responses) {
+  const assignments = {};
+  const shiftCount = {};
+  const weekShiftCount = {};
+  const names = Object.keys(responses);
+  names.forEach(n => { shiftCount[n] = 0; weekShiftCount[n] = {}; });
+
+  const monthStart = new Date(year, month - 1, 1);
+  const getWeekNum = (date) => Math.floor((date - monthStart) / (7 * 86400000));
+
+  const canAssign = (name, date) => {
+    const r = responses[name];
+    if (!r) return false;
+    if (r.maxPerWeek !== null && r.maxPerWeek !== undefined && r.maxPerWeek !== 'none') {
+      const wk = getWeekNum(date);
+      if ((weekShiftCount[name][wk] || 0) >= Number(r.maxPerWeek)) return false;
+    }
+    return true;
+  };
+
+  const record = (name, date, slot) => {
+    const key = `${fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate())}_${slot}`;
+    if (!assignments[key]) assignments[key] = [];
+    assignments[key].push(name);
+    shiftCount[name]++;
+    const wk = getWeekNum(date);
+    weekShiftCount[name][wk] = (weekShiftCount[name][wk] || 0) + 1;
+  };
+
+  const eligibles = (date, slot, mark, exclude) => {
+    const key = `${fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate())}_${slot}`;
+    return names
+      .filter(n => !exclude.includes(n))
+      .filter(n => responses[n].answers[key] === mark)
+      .filter(n => canAssign(n, date));
+  };
+
+  const sortByLoadAndRandom = (arr) => arr.sort((a,b) => {
+    const d = shiftCount[a] - shiftCount[b];
+    return d !== 0 ? d : Math.random() - 0.5;
+  });
+
+  const sortWithPref = (arr, date, preferredSide) => arr.sort((a,b) => {
+    const ra = responses[a], rb = responses[b];
+    const sa = ra.saturdayPref === preferredSide ? -2 : (ra.saturdayPref && ra.saturdayPref !== 'none' ? 2 : 0);
+    const sb = rb.saturdayPref === preferredSide ? -2 : (rb.saturdayPref && rb.saturdayPref !== 'none' ? 2 : 0);
+    if (sa !== sb) return sa - sb;
+    const d = shiftCount[a] - shiftCount[b];
+    return d !== 0 ? d : Math.random() - 0.5;
+  });
+
+  const pickWithFallback = (date, slot, capacity, exclude, preferredSide = null) => {
+    let circles = eligibles(date, slot, 'circle', exclude);
+    preferredSide ? sortWithPref(circles, date, preferredSide) : sortByLoadAndRandom(circles);
+    let selected = circles.slice(0, capacity);
+    if (selected.length < capacity) {
+      const triangles = eligibles(date, slot, 'triangle', [...exclude, ...selected]);
+      sortByLoadAndRandom(triangles);
+      selected = selected.concat(triangles.slice(0, capacity - selected.length));
+    }
+    return selected;
+  };
+
+  validDates.forEach(date => {
+    if (date.getDay() === 6) {
+      // 土曜日: 正午 → 午前 → 午後(正午の人が自動的に1枠埋める)
+      const noon = pickWithFallback(date, 'noon', 1, []);
+      noon.forEach(n => record(n, date, 'noon'));
+
+      const am = pickWithFallback(date, 'am', 1, noon, 'am');
+      am.forEach(n => record(n, date, 'am'));
+
+      // 午後: 定員2; 正午の人が1人埋める → 残り1
+      noon.forEach(n => record(n, date, 'pm'));
+      const remainPm = 2 - noon.length;
+      if (remainPm > 0) {
+        const pm = pickWithFallback(date, 'pm', remainPm, [...noon, ...am], 'pm');
+        pm.forEach(n => record(n, date, 'pm'));
+      }
+    } else {
+      // 平日: 午後のみ, 定員2
+      const selected = pickWithFallback(date, 'pm', 2, []);
+      selected.forEach(n => record(n, date, 'pm'));
+    }
+  });
+
+  return { assignments, shiftCount };
+}
+
+// ============================================================
+// メインコンポーネント
+// ============================================================
+const { year: nextYear, month: nextMonth } = getNextMonth();
+const ymKey = `${nextYear}-${pad(nextMonth)}`;
+
+function App() {
+  const [page, setPage] = useState(1);
+
+  // グローバル: 名前リスト (月をまたいで保存)
+  const [names, setNames] = useState(() => storage.load('shift_names', []));
+  const [currentName, setCurrentName] = useState(() => storage.load('shift_current_name', null));
+
+  // 月別設定
+  const [config, setConfig] = useState(() => storage.load(`shift_config_${ymKey}`, {
+    studyDays: [getThirdThursday(nextYear, nextMonth)].filter(Boolean),
+    extraHolidays: [],
+    removedHolidays: [],
+    totalPeople: 9
+  }));
+
+  // 回答 (全員分)
+  const [responses, setResponses] = useState(() => storage.load(`shift_responses_${ymKey}`, {}));
+
+  // 確定シフト (page 2 で計算)
+  const [decided, setDecided] = useState(null);
+
+  // 永続化
+  useEffect(() => { storage.save('shift_names', names); }, [names]);
+  useEffect(() => { storage.save('shift_current_name', currentName); }, [currentName]);
+  useEffect(() => { storage.save(`shift_config_${ymKey}`, config); }, [config]);
+  useEffect(() => { storage.save(`shift_responses_${ymKey}`, responses); }, [responses]);
+
+  // 有効な日付の計算 (日曜・祝日・勉強会日を除外)
+  const validDates = useMemo(() => {
+    const result = [];
+    const dim = daysInMonth(nextYear, nextMonth);
+    for (let d = 1; d <= dim; d++) {
+      const ds = fmtDate(nextYear, nextMonth, d);
+      const date = new Date(nextYear, nextMonth - 1, d);
+      if (date.getDay() === 0) continue;
+      const isBuiltinHoliday = HOLIDAYS[ds] && !config.removedHolidays.includes(ds);
+      const isExtraHoliday = config.extraHolidays.includes(ds);
+      if (isBuiltinHoliday || isExtraHoliday) continue;
+      if (config.studyDays.includes(ds)) continue;
+      result.push(date);
+    }
+    return result;
+  }, [config]);
+
+  // 現在ユーザの回答を取得 / 初期化
+  const myResponse = currentName ? responses[currentName] || null : null;
+  const ensureMyResponse = useCallback(() => {
+    if (!currentName) return null;
+    if (responses[currentName]) return responses[currentName];
+    const init = { answers: {}, maxPerWeek: 'none', saturdayPref: 'none', submitted: false };
+    setResponses(prev => ({ ...prev, [currentName]: init }));
+    return init;
+  }, [currentName, responses]);
+
+  // 自分の枠を選択
+  const setMark = (dateKey, slot, mark) => {
+    if (!currentName) return;
+    const key = `${dateKey}_${slot}`;
+    setResponses(prev => {
+      const me = prev[currentName] || { answers: {}, maxPerWeek: 'none', saturdayPref: 'none' };
+      return { ...prev, [currentName]: { ...me, answers: { ...me.answers, [key]: mark } } };
+    });
+  };
+
+  // 名前操作
+  const addName = (n) => {
+    const trimmed = n.trim();
+    if (!trimmed || names.includes(trimmed)) return;
+    setNames([...names, trimmed]);
+    setCurrentName(trimmed);
+  };
+  const deleteName = (n) => {
+    if (!confirm(`名前 "${n}" を削除しますか? この月の回答も削除されます。`)) return;
+    setNames(names.filter(x => x !== n));
+    if (currentName === n) setCurrentName(null);
+    setResponses(prev => { const c = {...prev}; delete c[n]; return c; });
+  };
+
+  // 設定操作
+  const addStudyDay = (d) => { if (d && !config.studyDays.includes(d)) setConfig({...config, studyDays: [...config.studyDays, d].sort()}); };
+  const removeStudyDay = (d) => setConfig({...config, studyDays: config.studyDays.filter(x => x !== d)});
+  const addExtraHoliday = (d) => { if (d && !config.extraHolidays.includes(d)) setConfig({...config, extraHolidays: [...config.extraHolidays, d].sort()}); };
+  const removeExtraHoliday = (d) => setConfig({...config, extraHolidays: config.extraHolidays.filter(x => x !== d)});
+  const toggleRemoveHoliday = (d) => {
+    if (config.removedHolidays.includes(d)) setConfig({...config, removedHolidays: config.removedHolidays.filter(x=>x!==d)});
+    else setConfig({...config, removedHolidays: [...config.removedHolidays, d].sort()});
+  };
+
+  const updateMyField = (field, value) => {
+    if (!currentName) return;
+    setResponses(prev => {
+      const me = prev[currentName] || { answers: {}, maxPerWeek: 'none', saturdayPref: 'none' };
+      return { ...prev, [currentName]: { ...me, [field]: value } };
+    });
+  };
+
+  // 送信ボタン: page 2 へ
+  const onSubmit = () => {
+    if (!currentName) { alert('まず名前を選択してください'); return; }
+    setResponses(prev => ({...prev, [currentName]: {...(prev[currentName]||{}), submitted: true}}));
+    computeAndShow();
+  };
+  const computeAndShow = () => {
+    const submittedResponses = {};
+    Object.entries(responses).forEach(([n, r]) => {
+      if (r.submitted || n === currentName) submittedResponses[n] = r;
+    });
+    const result = decideShifts(nextYear, nextMonth, validDates, submittedResponses);
+    setDecided(result);
+    setPage(2);
+  };
+
+  const responseCount = Object.values(responses).filter(r => r.submitted).length;
+  const allSubmitted = responseCount >= config.totalPeople;
+
+  if (page === 2) {
+    return <ResultPage
+      year={nextYear} month={nextMonth}
+      validDates={validDates}
+      config={config}
+      responses={responses}
+      decided={decided}
+      allSubmitted={allSubmitted}
+      responseCount={responseCount}
+      onBack={() => setPage(1)}
+    />;
+  }
+
+  return (
+    <div className="container">
+      <header>
+        <div className="topbar">
+          <div>
+            <h1>シフト決定システム</h1>
+            <div className="subtitle">SHIFT MANAGEMENT — {nextYear}年 {nextMonth}月分</div>
+          </div>
+          <div className="progress">{responseCount} / {config.totalPeople} 名 回答済</div>
+        </div>
+        <div className="ornament">⁂ ⁂ ⁂</div>
+      </header>
+
+      {/* 名前選択 */}
+      <section className="card">
+        <h2>名前を選択</h2>
+        <NameSection names={names} currentName={currentName} onSelect={setCurrentName} onAdd={addName} onDelete={deleteName} />
+      </section>
+
+      {/* 設定 */}
+      <section className="card">
+        <h2>月の設定</h2>
+        <div className="stat-grid">
+          <div className="stat">
+            <div className="stat-label">対象月</div>
+            <div className="stat-value">{nextYear}.{pad(nextMonth)}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">回答必要人数</div>
+            <div className="stat-value">
+              <input type="number" min="1" value={config.totalPeople}
+                onChange={e => setConfig({...config, totalPeople: Math.max(1, parseInt(e.target.value)||1)})}
+                style={{width: 70, fontSize: 20, fontFamily: 'Shippori Mincho, serif', padding: '4px 8px'}} /> 名
+            </div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">有効勤務日</div>
+            <div className="stat-value">{validDates.length}日</div>
+          </div>
+        </div>
+
+        <details>
+          <summary>勉強会の日 (デフォルト: 第3木曜日)</summary>
+          <DateListEditor dates={config.studyDays} onAdd={addStudyDay} onRemove={removeStudyDay}
+            year={nextYear} month={nextMonth} />
+        </details>
+
+        <details>
+          <summary>祝日の設定</summary>
+          <div style={{marginBottom: 12, fontSize: 13, color: 'var(--ink-soft)'}}>追加の祝日</div>
+          <DateListEditor dates={config.extraHolidays} onAdd={addExtraHoliday} onRemove={removeExtraHoliday}
+            year={nextYear} month={nextMonth} />
+          <hr/>
+          <div style={{marginBottom: 12, fontSize: 13, color: 'var(--ink-soft)'}}>デフォルト祝日 (クリックで除外/復帰)</div>
+          <div className="row">
+            {Object.entries(HOLIDAYS)
+              .filter(([d]) => d.startsWith(ymKey))
+              .map(([d, name]) => (
+                <button key={d} className={config.removedHolidays.includes(d) ? 'ghost small' : 'small'}
+                  onClick={() => toggleRemoveHoliday(d)} title={config.removedHolidays.includes(d) ? "クリックで復帰" : "クリックで除外"}>
+                  {d.split('-')[2]}日 {name} {config.removedHolidays.includes(d) ? '(除外中)' : ''}
+                </button>
+              ))}
+            {Object.keys(HOLIDAYS).filter(d => d.startsWith(ymKey)).length === 0 && (
+              <span className="empty-state">該当月に祝日なし</span>
+            )}
+          </div>
+        </details>
+      </section>
+
+      {/* オプション */}
+      {currentName && (
+      <section className="card">
+        <h2>個人オプション</h2>
+        <div className="row" style={{gap: 24}}>
+          <div className="col">
+            <label>週あたり最大シフト数</label>
+            <select value={myResponse?.maxPerWeek ?? 'none'} onChange={e => updateMyField('maxPerWeek', e.target.value)}>
+              <option value="none">特になし</option>
+              {[0,1,2,3,4,5,6,7].map(n => <option key={n} value={n}>週{n}日まで</option>)}
+            </select>
+          </div>
+          <div className="col">
+            <label>土曜午前と午後の両方に○の場合の希望</label>
+            <select value={myResponse?.saturdayPref ?? 'none'} onChange={e => updateMyField('saturdayPref', e.target.value)}>
+              <option value="none">特になし</option>
+              <option value="am">午前を希望</option>
+              <option value="pm">午後を希望</option>
+            </select>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {/* 自分のカレンダー */}
+      <section className="card">
+        <h2>あなたの参加可能日</h2>
+        <Legend />
+        {!currentName && <div className="warning">名前を選択すると入力できます</div>}
+        <div className="month-header">{nextYear}年 {nextMonth}月</div>
+        <Calendar
+          year={nextYear} month={nextMonth} config={config}
+          responses={currentName ? { [currentName]: responses[currentName] || { answers: {} } } : {}}
+          mode="select" currentName={currentName} onMark={setMark}
+        />
+      </section>
+
+      {/* 全員の回答カレンダー */}
+      <section className="card">
+        <h2>全員の回答状況</h2>
+        <div className="info">○: 参加可 △: 補欠可 ✕: 不可 — 各日各枠で他のメンバーの選択を確認できます</div>
+        <div className="month-header">{nextYear}年 {nextMonth}月</div>
+        <Calendar
+          year={nextYear} month={nextMonth} config={config}
+          responses={responses} mode="combined"
+        />
+      </section>
+
+      {/* 送信ボタン */}
+      <div className="submit-bar">
+        <button onClick={onSubmit} disabled={!currentName}>回答を送信 →</button>
+      </div>
+    </div>
+  );
+}
+
+function NameSection({ names, currentName, onSelect, onAdd, onDelete }) {
+  const [input, setInput] = useState('');
+  return (
+    <>
+      <div className="row" style={{marginBottom: 16}}>
+        <input type="text" placeholder="新しい名前を追加" value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { onAdd(input); setInput(''); } }} />
+        <button onClick={() => { onAdd(input); setInput(''); }}>+ 追加</button>
+      </div>
+      <div className="row">
+        {names.length === 0 && <div className="empty-state">名前を追加してください</div>}
+        {names.map(n => (
+          <div key={n} className={`name-pill ${currentName === n ? 'active' : ''}`} onClick={() => onSelect(n)}>
+            <span>{n}</span>
+            <span className="del" onClick={e => { e.stopPropagation(); onDelete(n); }}>×</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function DateListEditor({ dates, onAdd, onRemove, year, month }) {
+  const [input, setInput] = useState(fmtDate(year, month, 1));
+  return (
+    <>
+      <div className="row" style={{marginBottom: 12}}>
+        <input type="date" value={input} onChange={e => setInput(e.target.value)}
+          min={fmtDate(year, month, 1)} max={fmtDate(year, month, daysInMonth(year, month))} />
+        <button className="small" onClick={() => onAdd(input)}>+ 追加</button>
+      </div>
+      <div className="row">
+        {dates.length === 0 && <span className="empty-state">なし</span>}
+        {dates.map(d => (
+          <span key={d} className="pill">
+            {d}
+            <button onClick={() => onRemove(d)}>×</button>
+          </span>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="legend">
+      <div className="legend-item"><span className="legend-mark" style={{color:'var(--ok)'}}>○</span> 参加可能</div>
+      <div className="legend-item"><span className="legend-mark" style={{color:'var(--warn)'}}>△</span> 他に2人いなければ参加</div>
+      <div className="legend-item"><span className="legend-mark" style={{color:'var(--accent)', opacity:0.5}}>✕</span> 参加不可 (デフォルト)</div>
+      <div className="legend-item" style={{color:'var(--ink-muted)'}}>クリックで切り替え</div>
+    </div>
+  );
+}
+
+function Calendar({ year, month, config, responses, mode, currentName, onMark, decided }) {
+  const dim = daysInMonth(year, month);
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= dim; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const isExcluded = (d) => {
+    const ds = fmtDate(year, month, d);
+    const date = new Date(year, month - 1, d);
+    if (date.getDay() === 0) return '日曜';
+    if (HOLIDAYS[ds] && !config.removedHolidays.includes(ds)) return HOLIDAYS[ds];
+    if (config.extraHolidays.includes(ds)) return '祝日';
+    if (config.studyDays.includes(ds)) return '勉強会';
+    return null;
+  };
+
+  return (
+    <table className={`calendar ${mode === 'combined' || mode === 'decided' ? 'read-only' : ''}`}>
+      <thead>
+        <tr>
+          <th className="sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th className="sat">土</th>
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({ length: cells.length / 7 }).map((_, weekIdx) => (
+          <tr key={weekIdx}>
+            {cells.slice(weekIdx * 7, weekIdx * 7 + 7).map((d, i) => {
+              if (d === null) return <td key={i} className="empty"></td>;
+              const ds = fmtDate(year, month, d);
+              const date = new Date(year, month - 1, d);
+              const dow = date.getDay();
+              const excluded = isExcluded(d);
+              const dateClass = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+              if (excluded) {
+                return <td key={i} className="excluded">
+                  <div className={`date-num ${dateClass}`}>{d}</div>
+                  <div className="excluded-label">{excluded}</div>
+                </td>;
+              }
+              const slots = dow === 6 ? SLOTS_SATURDAY : SLOTS_WEEKDAY;
+              return (
+                <td key={i}>
+                  <div className={`date-num ${dateClass}`}>{d}</div>
+                  {mode === 'select' && slots.map(slot => {
+                    const key = `${ds}_${slot}`;
+                    const mark = currentName && responses[currentName]?.answers[key] || 'cross';
+                    return (
+                      <div key={slot} className="slot" onClick={() => currentName && onMark(ds, slot, cycleMark(mark))}>
+                        <span className="slot-label">{SLOT_LABEL[slot]}</span>
+                        <span className={`slot-mark ${mark}`}>{markChar(mark)}</span>
+                      </div>
+                    );
+                  })}
+                  {mode === 'combined' && (
+                    <div className="combined-cell">
+                      {slots.map(slot => {
+                        const key = `${ds}_${slot}`;
+                        return (
+                          <div key={slot} className="slot-line">
+                            <span className="slot-line-label">{SLOT_LABEL[slot]}</span>
+                            <span>
+                              {Object.entries(responses).map(([n, r]) => {
+                                const m = r.answers?.[key] || 'cross';
+                                if (m === 'cross') return null;
+                                return <span key={n} className={`name-tag ${m}`}>{markChar(m)}{n}</span>;
+                              })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {mode === 'decided' && (
+                    <div className="decided-cell">
+                      {slots.map(slot => {
+                        const key = `${ds}_${slot}`;
+                        const people = decided?.[key] || [];
+                        return (
+                          <div key={slot} className="slot-line">
+                            <span className="slot-line-label">{SLOT_LABEL[slot]}</span>
+                            <span>{people.map(n => <span key={n} className="assigned-name">{n}</span>)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ResultPage({ year, month, validDates, config, responses, decided, allSubmitted, responseCount, onBack }) {
+  const assignments = decided?.assignments || {};
+  const shiftCount = decided?.shiftCount || {};
+  const perPerson = {};
+  Object.entries(assignments).forEach(([key, people]) => {
+    const [ds] = key.split('_');
+    people.forEach(n => {
+      if (!perPerson[n]) perPerson[n] = new Set();
+      perPerson[n].add(ds);
+    });
+  });
+
+  return (
+    <div className="container">
+      <header>
+        <div className="topbar">
+          <div>
+            <h1>確定シフト (暫定)</h1>
+            <div className="subtitle">DECIDED SHIFT — {year}年 {month}月分</div>
+          </div>
+          <div className="progress">{responseCount} 名分の回答に基づく</div>
+        </div>
+        <div className="ornament">⁂ ⁂ ⁂</div>
+      </header>
+
+      {!allSubmitted && (
+        <div className="warning">
+          まだ全員 ({responseCount}/{config.totalPeople}) が回答していません。これは現時点の暫定シフトです。
+        </div>
+      )}
+      {allSubmitted && (
+        <div className="info">全員の回答が揃いました。LINE Botから配信できます。</div>
+      )}
+
+      <section className="card">
+        <h2>シフト表</h2>
+        <div className="month-header">{year}年 {month}月</div>
+        <Calendar year={year} month={month} config={config} responses={responses} mode="decided" decided={assignments} />
+      </section>
+
+      <section className="card">
+        <h2>個人別の出勤日</h2>
+        {Object.keys(perPerson).length === 0 && <div className="empty-state">割り当てなし</div>}
+        {Object.entries(perPerson).sort().map(([n, dates]) => (
+          <div key={n} className="summary-box">
+            <div className="summary-name">{n}<span className="summary-count">{shiftCount[n] || 0} 枠</span></div>
+            <div className="summary-dates">
+              {[...dates].sort().map(d => d.split('-').slice(1).join('/')).join('  /  ')}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className="submit-bar">
+        <button className="ghost" onClick={onBack}>← 回答を修正する</button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

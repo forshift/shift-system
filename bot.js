@@ -81,7 +81,7 @@ app.post('/api/send-reminder', auth, async (req, res) => {
   const { data: resps } = await supabase.from('responses')
     .select('name, submitted').eq('year_month', ym).eq('submitted', true);
 
-  const totalRequired = cfg?.total_people ?? 9;
+  const totalRequired = cfg?.total_people ?? 10;
   const submittedCount = (resps || []).length;
   const remaining = totalRequired - submittedCount;
 
@@ -114,7 +114,7 @@ app.post('/api/send-final-reminder', auth, async (req, res) => {
   const { data: resps } = await supabase.from('responses')
     .select('name, submitted').eq('year_month', ym).eq('submitted', true);
 
-  const totalRequired = cfg?.total_people ?? 9;
+  const totalRequired = cfg?.total_people ?? 10;
   const submittedCount = (resps || []).length;
   const remaining = totalRequired - submittedCount;
 

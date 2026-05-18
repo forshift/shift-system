@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS names (
 CREATE TABLE IF NOT EXISTS month_config (
   id BIGSERIAL PRIMARY KEY,
   year_month TEXT UNIQUE NOT NULL,    -- 例: '2026-06'
-  total_people INTEGER NOT NULL DEFAULT 9,
+  total_people INTEGER NOT NULL DEFAULT 10,
   study_days JSONB NOT NULL DEFAULT '[]'::jsonb,         -- ["2026-06-18", ...]
   extra_holidays JSONB NOT NULL DEFAULT '[]'::jsonb,     -- 追加祝日
   removed_holidays JSONB NOT NULL DEFAULT '[]'::jsonb,   -- 除外したデフォルト祝日

@@ -414,7 +414,7 @@ function App() {
     studyDays: [getThirdThursday(nextYear, nextMonth)].filter(Boolean),
     extraHolidays: [],
     removedHolidays: [],
-    totalPeople: 9
+    totalPeople: 10
   }));
 
   // 回答 (全員分)
@@ -454,7 +454,7 @@ function App() {
               studyDays: state.config.study_days || [],
               extraHolidays: state.config.extra_holidays || [],
               removedHolidays: state.config.removed_holidays || [],
-              totalPeople: state.config.total_people || 9,
+              totalPeople: state.config.total_people || 10,
             });
           }
           if (state.responses && state.responses.length) {

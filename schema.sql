@@ -51,8 +51,12 @@ CREATE TABLE IF NOT EXISTS decisions (
     -- 形式: { "2026-06-02_pm": ["田中","鈴木"], ... }
   shift_count JSONB NOT NULL DEFAULT '{}'::jsonb,
     -- 形式: { "田中": 5, "鈴木": 4, ... }
-  decided_at TIMESTAMPTZ DEFAULT NOW()
+  decided_at TIMESTAMPTZ DEFAULT NOW(),
+  posted_at TIMESTAMPTZ,               -- LINEに投稿済みなら時刻が入る (冪等性のため)
+  post_count INTEGER NOT NULL DEFAULT 0 -- 累計の投稿回数 (1=初投稿, 2以降=修正)
 );
+ALTER TABLE decisions ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
+ALTER TABLE decisions ADD COLUMN IF NOT EXISTS post_count INTEGER NOT NULL DEFAULT 0;
 
 -- updated_at の自動更新トリガー
 CREATE OR REPLACE FUNCTION set_updated_at()

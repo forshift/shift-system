@@ -137,7 +137,7 @@ app.post('/api/send-final-reminder', auth, async (req, res) => {
 });
 
 // ============================================================
-// 確定シフトの投稿
+// 確定シフトの投稿 (手動・認証あり・常に投稿)
 // POST /api/post-decided-shift  Header: x-admin-token
 // ============================================================
 app.post('/api/post-decided-shift', auth, async (req, res) => {
@@ -149,17 +149,86 @@ app.post('/api/post-decided-shift', auth, async (req, res) => {
     return res.status(404).json({ ok: false, error: '確定シフトが未登録です' });
   }
 
-  // 日付ごとにまとめて整形
+  const newCount = (dec.post_count || 0) + 1;
+  const text = formatDecidedShiftMessage(dec, ym, newCount);
+  const chunks = chunkText(text, 4500);
+  for (const chunk of chunks) {
+    await client.pushMessage(GROUP_ID, { type: 'text', text: chunk });
+  }
+  await supabase.from('decisions')
+    .update({ posted_at: new Date().toISOString(), post_count: newCount })
+    .eq('year_month', ym);
+  res.json({ ok: true, chunks: chunks.length, post_count: newCount });
+});
+
+// ============================================================
+// 確定シフトの自動投稿 (フロントから呼び出し・認証なし・冪等)
+// posted_at が未設定の時だけ投稿し、即 posted_at を立てる。
+// 既に投稿済みなら何もせず sent:false を返す。
+// POST /api/auto-post-decision
+// ============================================================
+const corsFrontend = (req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+};
+app.options('/api/auto-post-decision', corsFrontend);
+app.post('/api/auto-post-decision', corsFrontend, async (req, res) => {
+  const ym = nextYearMonth();
+
+  // 投稿権をアトミックに取る: posted_at IS NULL の行だけ更新成功する
+  const { data: claimed, error: claimErr } = await supabase
+    .from('decisions')
+    .update({ posted_at: new Date().toISOString() })
+    .eq('year_month', ym)
+    .is('posted_at', null)
+    .select();
+  if (claimErr) return res.status(500).json({ ok: false, error: claimErr.message });
+
+  if (!claimed || claimed.length === 0) {
+    // 取れなかった = 「未登録」か「既に投稿済み」のどちらか
+    const { data: dec } = await supabase.from('decisions')
+      .select('posted_at').eq('year_month', ym).maybeSingle();
+    if (!dec) return res.status(404).json({ ok: false, error: '確定シフトが未登録です', sent: false });
+    return res.json({ ok: true, message: '既に投稿済み', sent: false, posted_at: dec.posted_at });
+  }
+
+  // 投稿権を取れた -> LINEに送信
+  const dec = claimed[0];
+  const newCount = (dec.post_count || 0) + 1;
+  const text = formatDecidedShiftMessage(dec, ym, newCount);
+  const chunks = chunkText(text, 4500);
+  try {
+    for (const chunk of chunks) {
+      await client.pushMessage(GROUP_ID, { type: 'text', text: chunk });
+    }
+  } catch (e) {
+    // 送信失敗時は posted_at を戻して次回再試行できるようにする
+    await supabase.from('decisions').update({ posted_at: null }).eq('year_month', ym);
+    console.error('pushMessage failed:', e);
+    return res.status(500).json({ ok: false, error: e.message, sent: false });
+  }
+  // 投稿回数をインクリメント
+  await supabase.from('decisions').update({ post_count: newCount }).eq('year_month', ym);
+  res.json({ ok: true, sent: true, chunks: chunks.length, post_count: newCount });
+});
+
+// 確定シフト → LINEテキスト整形
+// postCount: 1 = 初投稿, 2以降 = 修正後の再投稿
+function formatDecidedShiftMessage(dec, ym, postCount = 1) {
   const byDate = {};
   Object.entries(dec.shift_data || {}).forEach(([key, names]) => {
     const [date, slot] = key.split('_');
     if (!byDate[date]) byDate[date] = {};
     byDate[date][slot] = names;
   });
-
   const slotLabel = { am: '午前', noon: '正午', pm: '午後' };
-  const lines = [`✅ ${ym.replace('-', '年')}月のシフトが確定しました`, ''];
-
+  const header = postCount > 1
+    ? `🔄 ${ym.replace('-', '年')}月のシフトを修正しました (${postCount}回目)`
+    : `✅ ${ym.replace('-', '年')}月のシフトが確定しました`;
+  const lines = [header, ''];
   Object.keys(byDate).sort().forEach(date => {
     const [, m, d] = date.split('-');
     const w = '日月火水木金土'[new Date(date).getDay()];
@@ -170,23 +239,14 @@ app.post('/api/post-decided-shift', auth, async (req, res) => {
     });
     lines.push('');
   });
-
-  // 個人別カウント
   if (dec.shift_count) {
     lines.push('───── 個人別 ─────');
     Object.entries(dec.shift_count)
       .sort((a,b) => b[1] - a[1])
       .forEach(([n, c]) => lines.push(`${n}: ${c}枠`));
   }
-
-  // LINEメッセージは5,000文字制限。長すぎる場合は分割
-  const text = lines.join('\n');
-  const chunks = chunkText(text, 4500);
-  for (const chunk of chunks) {
-    await client.pushMessage(GROUP_ID, { type: 'text', text: chunk });
-  }
-  res.json({ ok: true, chunks: chunks.length });
-});
+  return lines.join('\n');
+}
 
 // ============================================================
 // ユーティリティ
@@ -226,5 +286,6 @@ app.listen(port, () => {
   console.log(`- POST /api/notify-new-month    (月初呼びかけ)`);
   console.log(`- POST /api/send-reminder       (未回答リマインド)`);
   console.log(`- POST /api/send-final-reminder (締切後の強リマインド)`);
-  console.log(`- POST /api/post-decided-shift  (確定シフト投稿)`);
+  console.log(`- POST /api/post-decided-shift  (確定シフト投稿/手動)`);
+  console.log(`- POST /api/auto-post-decision  (確定シフト自動投稿/冪等)`);
 });

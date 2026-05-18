@@ -62,17 +62,17 @@
   .calendar th:last-child { border-right: none; }
   .calendar th.sat { color: #9bc3e8; }
   .calendar th.sun { color: var(--accent-soft); }
-  .calendar td { vertical-align: top; border: 1px solid var(--line); padding: 4px; height: 88px; width: 14.28%; background: white; position: relative; }
+  .calendar td { vertical-align: top; border: 1px solid var(--line); padding: 4px; height: 104px; width: 14.28%; background: white; position: relative; }
   .calendar td.empty { background: var(--bg); }
   .calendar td.excluded { background: #ede8db; color: var(--ink-muted); }
   .date-num { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink-soft); font-weight: 500; }
   .date-num.sat { color: #3a7ab2; }
   .date-num.sun { color: var(--accent); }
   .excluded-label { font-size: 10px; color: var(--ink-muted); font-style: italic; margin-top: 4px; }
-  .slot { display: flex; align-items: center; justify-content: space-between; margin-top: 3px; padding: 2px 5px; background: var(--bg); border-radius: 2px; cursor: pointer; font-size: 11px; transition: all 0.1s; user-select: none; }
+  .slot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding: 5px 8px; background: var(--bg); border-radius: 3px; cursor: pointer; font-size: 13px; transition: all 0.1s; user-select: none; min-height: 28px; }
   .slot:hover { background: var(--select); }
-  .slot-label { color: var(--ink-soft); font-size: 10px; font-weight: 500; letter-spacing: 0.04em; }
-  .slot-mark { font-size: 14px; line-height: 1; font-weight: 700; }
+  .slot-label { color: var(--ink-soft); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; }
+  .slot-mark { font-size: 18px; line-height: 1; font-weight: 700; }
   .slot-mark.circle { color: var(--ok); }
   .slot-mark.triangle { color: var(--warn); }
   .slot-mark.cross { color: var(--accent); opacity: 0.5; }
@@ -119,9 +119,10 @@
   @media (max-width: 700px) {
     body { padding: 16px 8px 60px; }
     .card { padding: 16px; }
-    .calendar td { height: 70px; padding: 2px; }
-    .slot { font-size: 10px; padding: 1px 3px; }
-    .slot-label { font-size: 9px; }
+    .calendar td { height: 90px; padding: 3px; }
+    .slot { font-size: 12px; padding: 4px 6px; min-height: 26px; }
+    .slot-label { font-size: 11px; }
+    .slot-mark { font-size: 16px; }
   }
 </style>
 </head>
@@ -135,7 +136,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script type="text/babel" data-presets="env,react">
-const { useState, useEffect, useMemo, useCallback } = React;
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
 // ============================================================
 // 設定: Supabaseを使う場合はここを編集
@@ -143,6 +144,7 @@ const { useState, useEffect, useMemo, useCallback } = React;
 const SUPABASE_URL = "https://boxjmdbbqlvlzokuqrzi.supabase.co";   // 例: "https://xxxxx.supabase.co"
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJveGptZGJicWx2bHpva3VxcnppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNzc5MjksImV4cCI6MjA5NDY1MzkyOX0.WdvVotKAtwWzCTkX_s181vnjx0883nTtmE2VNQ2NleQ";   // anon key
 const USE_SUPABASE = true; // trueにするとSupabaseを利用 (上のscriptタグも有効化)
+const BOT_URL = "https://shift-system-ige3.onrender.com"; // 確定シフトを自動投稿させるBotのURL (末尾スラッシュなし)
 
 // ============================================================
 // 日本の祝日データ (内閣府CSV由来; 1年ごとに更新可能)
@@ -226,10 +228,80 @@ async function loadStateFromBackend(yearMonth) {
 
 async function saveResponseToBackend(yearMonth, name, response) {
   if (!supabaseClient) return;
-  await supabaseClient.from('responses').upsert({
+  const payload = {
     year_month: yearMonth, name,
-    answers: response.answers, max_per_week: response.maxPerWeek, saturday_pref: response.saturdayPref
-  }, { onConflict: 'year_month,name' });
+    answers: response.answers || {},
+    max_per_week: response.maxPerWeek ?? 'none',
+    saturday_pref: response.saturdayPref ?? 'none',
+    submitted: !!response.submitted,
+  };
+  if (response.submitted) payload.submitted_at = new Date().toISOString();
+  await supabaseClient.from('responses').upsert(payload, { onConflict: 'year_month,name' });
+}
+
+async function saveConfigToBackend(yearMonth, config) {
+  if (!supabaseClient) return;
+  await supabaseClient.from('month_config').upsert({
+    year_month: yearMonth,
+    total_people: config.totalPeople,
+    study_days: config.studyDays,
+    extra_holidays: config.extraHolidays,
+    removed_holidays: config.removedHolidays,
+  }, { onConflict: 'year_month' });
+}
+
+async function syncNamesToBackend(localNames) {
+  if (!supabaseClient) return;
+  const { data: dbRows } = await supabaseClient.from('names').select('name');
+  const dbNames = (dbRows || []).map(r => r.name);
+  const toAdd = localNames.filter(n => !dbNames.includes(n));
+  const toRemove = dbNames.filter(n => !localNames.includes(n));
+  if (toAdd.length) {
+    await supabaseClient.from('names').upsert(toAdd.map(name => ({ name })), { onConflict: 'name' });
+  }
+  if (toRemove.length) {
+    await supabaseClient.from('names').delete().in('name', toRemove);
+  }
+}
+
+// 全員回答済みになった時に: 確定シフトをSupabaseに保存 → BotにLINE投稿を依頼
+// 修正版 (誰かが回答を修正→再送信) では、シフト内容が変わった場合のみ posted_at を
+// リセットして再投稿させる。結果が同じなら再投稿しない (LINEスパム防止)。
+async function saveDecisionAndAutoPost(yearMonth, decided) {
+  if (!supabaseClient) return;
+  const newShiftData = decided.assignments || {};
+  const newShiftCount = decided.shiftCount || {};
+
+  const { data: existing } = await supabaseClient.from('decisions')
+    .select('shift_data, posted_at').eq('year_month', yearMonth).maybeSingle();
+
+  const shiftChanged = !existing
+    || JSON.stringify(existing.shift_data || {}) !== JSON.stringify(newShiftData);
+
+  // シフトが変わっていなくて既に投稿済みなら、何もしない
+  if (!shiftChanged && existing && existing.posted_at) {
+    console.log('shift unchanged, skip auto-post');
+    return;
+  }
+
+  const payload = {
+    year_month: yearMonth,
+    shift_data: newShiftData,
+    shift_count: newShiftCount,
+  };
+  // シフト内容が変わった場合のみ posted_at をリセットして再投稿対象に
+  if (shiftChanged) payload.posted_at = null;
+
+  const { error } = await supabaseClient.from('decisions').upsert(payload, { onConflict: 'year_month' });
+  if (error) { console.error('decisions upsert error:', error); return; }
+
+  try {
+    const resp = await fetch(`${BOT_URL}/api/auto-post-decision`, { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    console.log('auto-post-decision:', resp.status, data);
+  } catch (e) {
+    console.error('auto-post-decision call failed:', e);
+  }
 }
 
 // ============================================================
@@ -351,11 +423,87 @@ function App() {
   // 確定シフト (page 2 で計算)
   const [decided, setDecided] = useState(null);
 
-  // 永続化
+  // localStorage 永続化 (オフライン時/Supabase未設定時のフォールバック)
   useEffect(() => { storage.save('shift_names', names); }, [names]);
   useEffect(() => { storage.save('shift_current_name', currentName); }, [currentName]);
   useEffect(() => { storage.save(`shift_config_${ymKey}`, config); }, [config]);
   useEffect(() => { storage.save(`shift_responses_${ymKey}`, responses); }, [responses]);
+
+  // Supabase 連携: マウント時にロード、変更時に保存 (デバイス間共有)
+  const loadedRef = useRef(false);
+
+  // 初回ロード: Supabase に何かあればその内容を採用。空なら localStorage の内容を seed
+  useEffect(() => {
+    if (!supabaseClient) { loadedRef.current = true; return; }
+    // クロージャ時点のローカル値を保持 (Supabaseが空だった場合の seed 用)
+    const initialNames = names;
+    const initialConfig = config;
+    const initialResponses = responses;
+    (async () => {
+      try {
+        const state = await loadStateFromBackend(ymKey);
+        const hasDbData = state && (
+          (state.names && state.names.length) ||
+          state.config ||
+          (state.responses && state.responses.length)
+        );
+        if (hasDbData) {
+          if (state.names && state.names.length) setNames(state.names);
+          if (state.config) {
+            setConfig({
+              studyDays: state.config.study_days || [],
+              extraHolidays: state.config.extra_holidays || [],
+              removedHolidays: state.config.removed_holidays || [],
+              totalPeople: state.config.total_people || 9,
+            });
+          }
+          if (state.responses && state.responses.length) {
+            const map = {};
+            state.responses.forEach(r => {
+              map[r.name] = {
+                answers: r.answers || {},
+                maxPerWeek: r.max_per_week || 'none',
+                saturdayPref: r.saturday_pref || 'none',
+                submitted: !!r.submitted,
+              };
+            });
+            setResponses(map);
+          }
+        } else {
+          // Supabase が空 -> localStorage の内容を seed
+          if (initialNames.length) await syncNamesToBackend(initialNames);
+          await saveConfigToBackend(ymKey, initialConfig);
+          for (const [name, response] of Object.entries(initialResponses)) {
+            await saveResponseToBackend(ymKey, name, response);
+          }
+        }
+      } catch (e) { console.error('loadStateFromBackend failed:', e); }
+      loadedRef.current = true;
+    })();
+  }, []);
+
+  // names 同期 (初回ロード後のみ)
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    syncNamesToBackend(names).catch(e => console.error('syncNamesToBackend:', e));
+  }, [names]);
+
+  // config 同期
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    saveConfigToBackend(ymKey, config).catch(e => console.error('saveConfigToBackend:', e));
+  }, [config]);
+
+  // 現在ユーザの回答を debounce 保存 (○△✕の選択など)
+  useEffect(() => {
+    if (!loadedRef.current || !currentName) return;
+    const me = responses[currentName];
+    if (!me) return;
+    const timer = setTimeout(() => {
+      saveResponseToBackend(ymKey, currentName, me).catch(e => console.error('saveResponseToBackend:', e));
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [responses, currentName]);
 
   // 有効な日付の計算 (日曜・祝日・勉強会日を除外)
   const validDates = useMemo(() => {
@@ -406,6 +554,10 @@ function App() {
     setNames(names.filter(x => x !== n));
     if (currentName === n) setCurrentName(null);
     setResponses(prev => { const c = {...prev}; delete c[n]; return c; });
+    if (supabaseClient) {
+      supabaseClient.from('responses').delete().eq('year_month', ymKey).eq('name', n)
+        .then(({ error }) => { if (error) console.error('delete response:', error); });
+    }
   };
 
   // 設定操作
@@ -440,6 +592,10 @@ function App() {
     const result = decideShifts(nextYear, nextMonth, validDates, submittedResponses);
     setDecided(result);
     setPage(2);
+    // 全員回答済みになったタイミングで、確定シフトを保存しLINEへ自動投稿
+    if (Object.keys(submittedResponses).length >= config.totalPeople) {
+      saveDecisionAndAutoPost(ymKey, result);
+    }
   };
 
   const responseCount = Object.values(responses).filter(r => r.submitted).length;

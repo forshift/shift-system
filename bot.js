@@ -266,11 +266,32 @@ function formatDecidedShiftMessage(dec, ym, postCount = 1) {
     }
   });
   lines.push('');
-  if (dec.shift_count) {
+  // 個人別: サイトと同じく日付を羅列。土曜は最も早い時間帯ラベルを併記。
+  const perPerson = {};  // name -> { date: [slots] }
+  Object.entries(dec.shift_data || {}).forEach(([key, names]) => {
+    const [date, slot] = key.split('_');
+    names.forEach(n => {
+      if (!perPerson[n]) perPerson[n] = {};
+      if (!perPerson[n][date]) perPerson[n][date] = [];
+      perPerson[n][date].push(slot);
+    });
+  });
+  if (Object.keys(perPerson).length) {
     lines.push('───── 個人別 ─────');
-    Object.entries(dec.shift_count)
-      .sort((a,b) => b[1] - a[1])
-      .forEach(([n, c]) => lines.push(`${n}: ${c}枠`));
+    Object.entries(perPerson).sort().forEach(([n, dateMap]) => {
+      const chips = Object.keys(dateMap).sort().map(d => {
+        const day = parseInt(d.split('-')[2]);
+        const dow = new Date(d).getDay();
+        let label = `${day}`;
+        if (dow === 6) {
+          const slots = dateMap[d];
+          const earliest = ['am','noon','pm'].find(s => slots.includes(s));
+          if (earliest) label += ` ${slotLabel[earliest]}`;
+        }
+        return label;
+      });
+      lines.push(`${n}: ${chips.join('、')}`);
+    });
   }
   return lines.join('\n');
 }

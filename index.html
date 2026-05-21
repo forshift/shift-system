@@ -470,8 +470,8 @@ function decideShifts(year, month, validDates, responses) {
     };
 
     const scoreAssignment = (pat, asn) => {
-      // [-people, -slots, triangles, daySum, surveyMisses, amSum, random]: 小さいほど良い
-      // 順位: 人数最大 → 枠数最大 → ○優先 → 公平性1(出勤日数) → アンケート → 公平性2(午前回数) → ランダム
+      // [-people, -slotTypes, -slots, triangles, daySum, surveyMisses, amSum, random]: 小さいほど良い
+      // 順位: 人数最大 → カバー時間帯数最大(満遍なく) → 枠数最大 → ○優先 → 公平性1 → アンケート → 公平性2(午前回数) → ランダム
       let triangles = 0, daySum = 0, surveyMisses = 0, amSum = 0;
       const addPerson = (n, slotsOfPerson, preferSlot) => {
         for (const s of slotsOfPerson) {
@@ -486,8 +486,12 @@ function decideShifts(year, month, validDates, responses) {
       for (const n of asn.amNoon) addPerson(n, ['am', 'noon'], 'am');
       for (const n of asn.noonPm) addPerson(n, ['noon', 'pm'], 'pm');
       for (const n of asn.pmOnly) addPerson(n, ['pm'], 'pm');
+      const amFilled = (pat.a > 0 || pat.b > 0) ? 1 : 0;
+      const noonFilled = (pat.b > 0 || pat.c > 0) ? 1 : 0;
+      const pmFilled = (pat.c > 0 || pat.d > 0) ? 1 : 0;
+      const slotTypes = amFilled + noonFilled + pmFilled;
       const slots = pat.a + 2 * pat.b + 2 * pat.c + pat.d;
-      return [-pat.total, -slots, triangles, daySum, surveyMisses, amSum, Math.random()];
+      return [-pat.total, -slotTypes, -slots, triangles, daySum, surveyMisses, amSum, Math.random()];
     };
 
     const cmpScore = (x, y) => {

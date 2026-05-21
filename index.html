@@ -94,9 +94,9 @@
   .read-only .slot:hover { background: var(--bg); }
   .combined-cell { font-size: clamp(10px, 1.1vw, 12px); padding: 2px 3px; line-height: 1.4; }
   .combined-cell .slot-line { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; }
-  /* 平日: 名前を幅の中央(50%)に正確に配置。内側<span>をflex化して trailing margin の影響を排除 */
+  /* 平日: 名前を幅の中央(50%)に正確に配置。pxを使わず gap も % で表現してスマホで揺れないように */
   .combined-cell .slot-line.solo { display: block; }
-  .combined-cell .slot-line.solo > span { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 3px; width: 100%; }
+  .combined-cell .slot-line.solo > span { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 4% 4%; width: 100%; }
   .combined-cell .slot-line.solo .name-tag { margin: 0; }
   .combined-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 28px; flex-shrink: 0; }
   /* 土曜: ラベル左、名前は右枠内の中央配置 */
@@ -109,9 +109,9 @@
   .name-tag.cross { background: #f0d8d8; color: var(--accent); }
   .decided-cell { padding: 4px 5px; }
   .decided-cell .slot-line { display: flex; gap: 4px; margin-top: 2px; font-size: clamp(11px, 1.2vw, 13px); flex-wrap: wrap; justify-content: center; }
-  /* 平日: 名前を幅の中央(50%)に正確に配置 */
+  /* 平日: 名前を幅の中央(50%)に正確に配置。gap も % で表現 */
   .decided-cell .slot-line.solo { display: block; }
-  .decided-cell .slot-line.solo > span { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 3px; width: 100%; }
+  .decided-cell .slot-line.solo > span { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 4% 4%; width: 100%; }
   .decided-cell .slot-line.solo .assigned-name { margin: 0; }
   /* シフト表 土曜: ラベルは左揃え、名前は残りスペースの中央配置 */
   .decided-cell .sat-line { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }

@@ -113,7 +113,6 @@ app.post('/api/send-reminder', auth, async (req, res) => {
 
 // ============================================================
 // 締切後の強リマインド (22日以降、未回答者がいる限り毎日)
-// 22-23日: 通常の強リマインド / 24日以降: 激つよモード + 怒スタンプ
 // POST /api/send-final-reminder  Header: x-admin-token
 // ============================================================
 app.post('/api/send-final-reminder', auth, async (req, res) => {
@@ -131,29 +130,6 @@ app.post('/api/send-final-reminder', auth, async (req, res) => {
     return res.json({ ok: true, message: '全員回答済み', sent: false });
   }
 
-  const jstDay = jstDayOfMonth();
-  const angryMode = jstDay >= 24;
-
-  if (angryMode) {
-    const message = [
-      `💢💢💢`,
-      '',
-      `何回言わせるんですか?`,
-      `${ym.replace('-', '年')}月分のシフト、まだ ${remaining} 名足りていません。`,
-      '',
-      'Botを舐めるな。',
-      '即刻入力しなさい。',
-      '',
-      SITE_URL,
-    ].join('\n');
-    // 怒スタンプを同梱 (LINE標準スタンプ: Brown激怒)
-    await client.pushMessage(GROUP_ID, [
-      { type: 'text', text: message },
-      { type: 'sticker', packageId: '11537', stickerId: '52002773' },
-    ]);
-    return res.json({ ok: true, remaining, sent: true, mode: 'angry', message });
-  }
-
   const message = [
     `⚠️ シフト入力の締切を過ぎています`,
     '',
@@ -165,7 +141,7 @@ app.post('/api/send-final-reminder', auth, async (req, res) => {
   ].join('\n');
 
   await client.pushMessage(GROUP_ID, { type: 'text', text: message });
-  res.json({ ok: true, remaining, sent: true, mode: 'normal', message });
+  res.json({ ok: true, remaining, sent: true, message });
 });
 
 // ============================================================
@@ -314,13 +290,6 @@ function nextYearMonth() {
   let y = now.getFullYear(), m = now.getMonth() + 2;
   if (m > 12) { m -= 12; y++; }
   return `${y}-${String(m).padStart(2,'0')}`;
-}
-
-// JST (UTC+9) の「今日が何日か」を返す
-function jstDayOfMonth() {
-  const now = new Date();
-  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  return jst.getUTCDate();
 }
 
 function chunkText(text, maxLen) {

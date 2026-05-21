@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>シフト決定システム</title>
+<title>シフト調整</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -23,16 +23,16 @@
     --select: #f5e6c4;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { background: var(--bg); color: var(--ink); font-family: 'Noto Sans JP', sans-serif; font-weight: 400; line-height: 1.6; }
-  body { min-height: 100vh; padding: 24px 16px 80px; }
+  html, body { background: var(--bg); color: var(--ink); font-family: 'Noto Sans JP', sans-serif; font-weight: 400; line-height: 1.7; }
+  body { min-height: 100vh; padding: clamp(20px, 3vw, 40px) clamp(4px, 1.5vw, 20px) 100px; }
   .container { max-width: 1100px; margin: 0 auto; }
   h1, h2, h3 { font-family: 'Shippori Mincho', serif; font-weight: 700; letter-spacing: 0.02em; }
-  h1 { font-size: 28px; margin-bottom: 4px; }
-  h2 { font-size: 19px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
-  h2::before { content: ''; width: 4px; height: 18px; background: var(--accent); display: inline-block; }
-  h3 { font-size: 15px; margin-bottom: 10px; color: var(--ink-soft); }
-  .subtitle { color: var(--ink-muted); font-size: 13px; margin-bottom: 32px; letter-spacing: 0.05em; }
-  .card { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 24px; margin-bottom: 20px; }
+  h1 { font-size: clamp(22px, 3vw, 32px); margin-bottom: 4px; }
+  h2 { font-size: clamp(16px, 2vw, 21px); margin-bottom: clamp(18px, 2.5vw, 26px); display: flex; align-items: center; gap: 10px; }
+  h2::before { content: ''; width: 4px; height: clamp(14px, 1.8vw, 20px); background: var(--accent); display: inline-block; }
+  h3 { font-size: clamp(13px, 1.5vw, 16px); margin-bottom: clamp(12px, 1.5vw, 16px); color: var(--ink-soft); }
+  .subtitle { color: var(--ink-muted); font-size: clamp(11px, 1.2vw, 14px); margin-bottom: 32px; letter-spacing: 0.05em; }
+  .card { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: clamp(20px, 2.8vw, 32px) clamp(14px, 2vw, 26px); margin-bottom: clamp(20px, 3vw, 36px); }
   .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
   .col { display: flex; flex-direction: column; gap: 8px; }
   input[type="text"], input[type="number"], input[type="date"], select {
@@ -58,84 +58,94 @@
   .name-pill .del:hover { color: var(--accent); }
   .name-pill.active .del { color: var(--bg-card); opacity: 0.7; }
   .calendar { border-collapse: separate; border-spacing: 0; width: 100%; background: white; border: 1px solid var(--line-strong); table-layout: fixed; }
-  .calendar th { background: var(--ink); color: var(--bg-card); padding: 10px 4px; font-size: 12px; font-weight: 500; letter-spacing: 0.1em; border-right: 1px solid var(--ink-soft); }
+  .calendar th { background: var(--ink); color: var(--bg-card); padding: clamp(6px, 1vw, 12px) clamp(2px, 0.5vw, 6px); font-size: clamp(10px, 1.2vw, 13px); font-weight: 500; letter-spacing: 0.08em; border-right: 1px solid var(--ink-soft); }
   .calendar th:last-child { border-right: none; }
   .calendar th.sat { color: #9bc3e8; }
-  /* 月〜金は1単位幅、土は2単位幅 (合計7単位) */
-  .calendar th:nth-child(6), .calendar td:nth-child(6) { width: 28.57%; }
-  .calendar td { vertical-align: top; border: 1px solid var(--line); padding: 4px; height: 104px; width: 14.28%; background: white; position: relative; }
+  /* 列幅: 月〜金は 1 単位、土は 2.5 単位 (PCもスマホも同比率)
+     -> 各平日 = 1/7.5 ≒ 13.33%, 土 = 2.5/7.5 ≒ 33.33% */
+  .calendar th:nth-child(6), .calendar td:nth-child(6) { width: 33.33%; }
+  /* セル: tdはtable-cellのまま。内側に .cell-inner を置いて flex で空きスペース中央配置 */
+  .calendar td { border: 1px solid var(--line); padding: 0; height: clamp(70px, 11vw, 110px); width: 13.33%; background: white; position: relative; vertical-align: top; }
+  .cell-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; height: 100%; padding: clamp(20px, 2.5vw, 28px) clamp(2px, 0.5vw, 6px) clamp(2px, 0.5vw, 6px); }
+  .cell-inner > .combined-cell,
+  .cell-inner > .decided-cell,
+  .cell-inner > .slot-rows-group { width: 100%; align-self: stretch; }
   .calendar td.empty { background: var(--bg); }
   .calendar td.excluded { background: #ede8db; color: var(--ink-muted); }
-  .date-num { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink-soft); font-weight: 500; }
+  .date-num { position: absolute; top: clamp(3px, 0.6vw, 6px); left: clamp(4px, 0.8vw, 8px); font-family: 'JetBrains Mono', monospace; font-size: clamp(11px, 1.3vw, 14px); color: var(--ink-soft); font-weight: 500; line-height: 1; }
   .date-num.sat { color: #3a7ab2; }
-  .excluded-label { font-size: 10px; color: var(--ink-muted); font-style: italic; margin-top: 4px; }
-  .slot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding: 5px 8px; background: var(--bg); border-radius: 3px; cursor: pointer; font-size: 13px; transition: all 0.1s; user-select: none; min-height: 28px; }
-  .slot.solo { justify-content: center; padding: 10px 4px; min-height: 44px; }
+  .excluded-label { font-size: clamp(9px, 1vw, 11px); color: var(--ink-muted); font-style: italic; margin-top: 4px; }
+  .slot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding: clamp(3px, 0.7vw, 6px) clamp(4px, 1vw, 10px); background: var(--bg); border-radius: 3px; cursor: pointer; font-size: clamp(11px, 1.3vw, 14px); transition: all 0.1s; user-select: none; min-height: clamp(26px, 3.5vw, 32px); }
+  .slot.solo { justify-content: center; padding: clamp(6px, 1.5vw, 12px) clamp(2px, 0.5vw, 6px); min-height: clamp(38px, 5vw, 52px); width: clamp(40px, 6vw, 60px); margin: 0; }
+  /* 土曜の参加可能日カレンダー: ラベル左/選択枠は右余白の中央。3行をグループ化 */
+  .slot-rows-group { display: flex; flex-direction: column; gap: 4px; }
+  .slot-row { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
+  .slot-row-label { font-size: clamp(12px, 1.4vw, 15px); color: var(--ink-muted); font-weight: 600; text-align: left; }
+  .slot.in-row { width: clamp(38px, 5vw, 50px); margin: 0 auto; justify-content: center; padding: clamp(4px, 1vw, 8px) 2px; min-height: clamp(30px, 4vw, 38px); }
+  .slot.in-row .slot-mark { font-size: clamp(18px, 2.4vw, 24px); }
   .slot:hover { background: var(--select); }
-  .slot-label { color: var(--ink-soft); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; }
-  .slot-mark { font-size: 18px; line-height: 1; font-weight: 700; }
+  .slot-label { color: var(--ink-soft); font-size: clamp(10px, 1.2vw, 13px); font-weight: 500; letter-spacing: 0.04em; }
+  .slot-mark { font-size: clamp(16px, 2vw, 22px); line-height: 1; font-weight: 700; }
   .slot.solo .slot-mark { font-size: 26px; }
   .slot-mark.circle { color: var(--ok); }
   .slot-mark.triangle { color: var(--warn); }
   .slot-mark.cross { color: var(--accent); opacity: 0.5; }
   .read-only .slot { cursor: default; }
   .read-only .slot:hover { background: var(--bg); }
-  .combined-cell { font-size: 10px; padding: 2px 4px; line-height: 1.4; }
+  .combined-cell { font-size: clamp(10px, 1.1vw, 12px); padding: 2px 3px; line-height: 1.4; }
   .combined-cell .slot-line { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; }
-  .combined-cell .slot-line.solo { display: block; }
+  /* 平日: 名前を左右中央に */
+  .combined-cell .slot-line.solo { display: block; text-align: center; }
   .combined-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 28px; flex-shrink: 0; }
-  .combined-cell .name-tag { font-size: 12px; padding: 2px 6px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-block; }
+  /* 土曜: ラベル左、名前は右枠内の中央配置 */
+  .combined-cell .sat-line { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
+  .combined-cell .sat-line .sat-label { text-align: left; margin-right: 0; }
+  .combined-cell .sat-line .sat-names-wrap { text-align: center; }
+  .combined-cell .name-tag { font-size: clamp(11px, 1.2vw, 14px); padding: 2px 6px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-block; }
   .name-tag.circle { background: #d8ebd8; color: var(--ok); }
   .name-tag.triangle { background: #f3e2c8; color: var(--warn); }
   .name-tag.cross { background: #f0d8d8; color: var(--accent); }
   .decided-cell { padding: 4px 5px; }
-  .decided-cell .slot-line { display: flex; gap: 4px; margin-top: 2px; font-size: 11px; flex-wrap: wrap; }
-  .decided-cell .slot-line.solo { display: block; }
+  .decided-cell .slot-line { display: flex; gap: 4px; margin-top: 2px; font-size: clamp(11px, 1.2vw, 13px); flex-wrap: wrap; justify-content: center; }
+  .decided-cell .slot-line.solo { display: block; text-align: center; }
+  /* シフト表 土曜: ラベルは左揃え、名前は残りスペースの中央配置 */
+  .decided-cell .sat-line { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
+  .decided-cell .sat-line .sat-label { text-align: left; margin-right: 0; }
+  .decided-cell .sat-line .sat-names-wrap { text-align: center; }
   .decided-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 32px; flex-shrink: 0; }
-  .decided-cell .assigned-name { font-size: 13px; background: var(--select); padding: 2px 8px; border-radius: 2px; color: var(--ink); font-weight: 500; white-space: nowrap; display: inline-block; margin: 0 3px 3px 0; }
+  .decided-cell .assigned-name { font-size: clamp(12px, 1.4vw, 15px); background: var(--select); padding: 2px 8px; border-radius: 2px; color: var(--ink); font-weight: 500; white-space: nowrap; display: inline-block; margin: 0 3px 3px 0; }
   /* 土曜セル: 「午前: 名前、名前」のインライン表示 (縦長を抑える) */
-  .sat-line { display: block; line-height: 1.6; margin-bottom: 2px; font-size: 12px; }
+  .sat-line { display: block; line-height: 1.7; margin-bottom: 4px; font-size: clamp(12px, 1.4vw, 15px); }
   .sat-line .sat-label { color: var(--ink-muted); font-weight: 600; margin-right: 4px; }
-  .sat-line .sat-name { white-space: nowrap; display: inline-block; vertical-align: top; }
-  .sat-line .sat-name.circle { color: var(--ok); }
-  .sat-line .sat-name.triangle { color: var(--warn); }
-  .sat-line .sat-name.cross { color: var(--accent); }
-  .sat-line .sat-name-decided { font-weight: 600; color: var(--ink); }
-  .month-header { text-align: center; font-family: 'Shippori Mincho', serif; font-size: 22px; margin: 24px 0 12px; letter-spacing: 0.1em; }
-  .legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--ink-soft); margin-bottom: 16px; }
+  .sat-line .sat-name { white-space: nowrap; display: inline-block; vertical-align: top; padding: 2px 8px; border-radius: 2px; margin: 0 3px 3px 0; }
+  .sat-line .sat-name.circle { background: #d8ebd8; color: var(--ok); }
+  .sat-line .sat-name.triangle { background: #f3e2c8; color: var(--warn); }
+  .sat-line .sat-name.cross { background: #f0d8d8; color: var(--accent); }
+  .sat-line .sat-name-decided { background: var(--select); color: var(--ink); font-weight: 600; }
+  .month-header { text-align: center; font-family: 'Shippori Mincho', serif; font-size: clamp(18px, 2.4vw, 24px); margin: clamp(20px, 3vw, 32px) 0 clamp(14px, 2vw, 20px); letter-spacing: 0.1em; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--ink-soft); margin-bottom: clamp(16px, 2.2vw, 24px); }
   .legend-item { display: flex; align-items: center; gap: 6px; }
   .legend-mark { font-weight: 700; font-size: 14px; }
   .summary-box { background: white; border: 1px solid var(--line); padding: 16px; border-radius: 3px; margin-bottom: 12px; }
   .summary-name { font-family: 'Shippori Mincho', serif; font-size: 16px; margin-bottom: 6px; }
-  .summary-dates { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink-soft); line-height: 1.8; }
+  .summary-dates { font-family: 'JetBrains Mono', monospace; font-size: clamp(12px, 1.3vw, 14px); color: var(--ink-soft); line-height: 1.8; }
+  .summary-dates .date-chip { white-space: nowrap; display: inline-block; }
   .summary-count { display: inline-block; margin-left: 8px; padding: 2px 8px; background: var(--ink); color: var(--bg-card); border-radius: 999px; font-size: 11px; font-family: 'Noto Sans JP', sans-serif; }
   .empty-state { color: var(--ink-muted); font-style: italic; font-size: 13px; padding: 8px 0; }
-  .submit-bar { display: flex; gap: 12px; justify-content: flex-end; padding-top: 8px; }
-  .submit-bar button { padding: 12px 28px; font-size: 15px; }
-  .warning { background: #fdf3e7; border: 1px solid var(--warn); color: var(--warn); padding: 12px 16px; border-radius: 3px; font-size: 13px; margin-bottom: 16px; }
-  .info { background: #e8f0f5; border: 1px solid #7da7c8; color: #2c5a82; padding: 12px 16px; border-radius: 3px; font-size: 13px; margin-bottom: 16px; }
+  .submit-bar { display: flex; gap: 12px; justify-content: flex-end; padding-top: clamp(16px, 2.5vw, 28px); margin-top: clamp(8px, 1.5vw, 16px); }
+  .submit-bar button { padding: clamp(12px, 1.8vw, 16px) clamp(24px, 3vw, 36px); font-size: clamp(14px, 1.5vw, 16px); }
+  .warning { background: #fdf3e7; border: 1px solid var(--warn); color: var(--warn); padding: clamp(14px, 1.8vw, 18px) clamp(14px, 2vw, 20px); border-radius: 3px; font-size: 13px; margin-bottom: clamp(18px, 2.5vw, 24px); }
+  .info { background: #e8f0f5; border: 1px solid #7da7c8; color: #2c5a82; padding: clamp(14px, 1.8vw, 18px) clamp(14px, 2vw, 20px); border-radius: 3px; font-size: 13px; margin-bottom: clamp(18px, 2.5vw, 24px); }
   .topbar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
   .progress { font-size: 13px; color: var(--ink-muted); font-family: 'JetBrains Mono', monospace; }
   .ornament { text-align: center; color: var(--ink-muted); font-size: 18px; margin: 8px 0 32px; letter-spacing: 1em; }
   .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--ink); margin-bottom: 0; }
   .tab { padding: 10px 20px; cursor: pointer; border: 1px solid var(--line); border-bottom: none; background: var(--bg); font-size: 13px; font-weight: 500; }
   .tab.active { background: var(--ink); color: var(--bg-card); border-color: var(--ink); }
-  details { background: white; border: 1px solid var(--line); border-radius: 3px; padding: 12px 16px; margin-bottom: 12px; }
+  details { background: white; border: 1px solid var(--line); border-radius: 3px; padding: clamp(14px, 1.8vw, 18px) clamp(14px, 2vw, 20px); margin-bottom: clamp(14px, 2vw, 18px); }
   details summary { cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink-soft); user-select: none; }
   details[open] summary { margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .stat { background: white; padding: 12px 16px; border: 1px solid var(--line); }
-  .stat-label { font-size: 11px; color: var(--ink-muted); letter-spacing: 0.1em; text-transform: uppercase; }
-  .stat-value { font-family: 'Shippori Mincho', serif; font-size: 22px; margin-top: 2px; }
   hr { border: none; border-top: 1px dashed var(--line-strong); margin: 20px 0; }
-  @media (max-width: 700px) {
-    body { padding: 16px 8px 60px; }
-    .card { padding: 16px; }
-    .calendar td { height: 90px; padding: 3px; }
-    .slot { font-size: 12px; padding: 4px 6px; min-height: 26px; }
-    .slot-label { font-size: 11px; }
-    .slot-mark { font-size: 16px; }
-  }
 </style>
 </head>
 <body>
@@ -355,13 +365,16 @@ function decideShifts(year, month, validDates, responses) {
   };
 
   // 土曜の枠ピック時のコスト:
-  //   am  → 「am=○ AND noon=○」なら自動で正午も埋まるのでcost2、そうでなければcost1
-  //   noon → 「noon=○ AND pm=○」なら自動で午後も埋まるのでcost2、そうでなければcost1
+  //   am  → 「am=○or△ AND noon=○or△」なら自動で正午も埋まるのでcost2、そうでなければcost1
+  //   noon → 「noon=○or△ AND pm=○or△」なら自動で午後も埋まるのでcost2、そうでなければcost1
   //   pm  → 単独なのでcost1
-  const isCircleAt = (n, ds, slot) => responses[n].answers[`${ds}_${slot}`] === 'circle';
+  const isAvailableAt = (n, ds, slot) => {
+    const m = responses[n].answers[`${ds}_${slot}`];
+    return m === 'circle' || m === 'triangle';
+  };
   const satCostForPick = (n, slot, ds) => {
-    if (slot === 'am')   return (isCircleAt(n, ds, 'am')   && isCircleAt(n, ds, 'noon')) ? 2 : 1;
-    if (slot === 'noon') return (isCircleAt(n, ds, 'noon') && isCircleAt(n, ds, 'pm'))   ? 2 : 1;
+    if (slot === 'am')   return (isAvailableAt(n, ds, 'am')   && isAvailableAt(n, ds, 'noon')) ? 2 : 1;
+    if (slot === 'noon') return (isAvailableAt(n, ds, 'noon') && isAvailableAt(n, ds, 'pm'))   ? 2 : 1;
     return 1;
   };
 
@@ -416,9 +429,9 @@ function decideShifts(year, month, validDates, responses) {
       // 午前 (定員1)
       const am = pickWithFallback(date, 'am', 1, [], 'am');
       am.forEach(n => record(n, date, 'am'));
-      // 自動で正午にも入れるのは「両方○」の人だけ
+      // 自動で正午にも入れるのは「両方○または△」(✕でない) の人だけ
       am.forEach(n => {
-        if (isCircleAt(n, ds, 'am') && isCircleAt(n, ds, 'noon')) {
+        if (isAvailableAt(n, ds, 'am') && isAvailableAt(n, ds, 'noon')) {
           record(n, date, 'noon');
         }
       });
@@ -429,9 +442,9 @@ function decideShifts(year, month, validDates, responses) {
       if (currentNoon.length === 0) {
         noonOnly = pickWithFallback(date, 'noon', 1, am);
         noonOnly.forEach(n => record(n, date, 'noon'));
-        // 自動で午後にも入れるのは「両方○」の人だけ
+        // 自動で午後にも入れるのは「両方○または△」の人だけ
         noonOnly.forEach(n => {
-          if (isCircleAt(n, ds, 'noon') && isCircleAt(n, ds, 'pm')) {
+          if (isAvailableAt(n, ds, 'noon') && isAvailableAt(n, ds, 'pm')) {
             record(n, date, 'pm');
           }
         });
@@ -678,12 +691,10 @@ function App() {
       <header>
         <div className="topbar">
           <div>
-            <h1>シフト決定システム</h1>
-            <div className="subtitle">SHIFT MANAGEMENT — {nextYear}年 {nextMonth}月分</div>
+            <h1>シフト調整 {nextMonth}月分</h1>
           </div>
           <div className="progress">{responseCount} / {config.totalPeople} 名 回答済</div>
         </div>
-        <div className="ornament">⁂ ⁂ ⁂</div>
       </header>
 
       {/* 名前選択 */}
@@ -694,30 +705,21 @@ function App() {
 
       {/* 設定 */}
       <section className="card">
-        <h2>月の設定</h2>
-        <div className="stat-grid">
-          <div className="stat">
-            <div className="stat-label">対象月</div>
-            <div className="stat-value">{nextYear}.{pad(nextMonth)}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-label">回答必要人数</div>
-            <div className="stat-value">
-              <input type="number" min="1" value={config.totalPeople}
-                onChange={e => setConfig({...config, totalPeople: Math.max(1, parseInt(e.target.value)||1)})}
-                style={{width: 70, fontSize: 20, fontFamily: 'Shippori Mincho, serif', padding: '4px 8px'}} /> 名
-            </div>
-          </div>
-          <div className="stat">
-            <div className="stat-label">有効勤務日</div>
-            <div className="stat-value">{validDates.length}日</div>
+        <h2>{nextMonth}月の設定</h2>
+        <div className="row" style={{alignItems: 'center', gap: 10, marginBottom: 16}}>
+          <label style={{fontSize: 'clamp(12px, 1.3vw, 14px)'}}>回答必要人数</label>
+          <div style={{display: 'inline-flex', alignItems: 'baseline', gap: 4, whiteSpace: 'nowrap'}}>
+            <input type="number" min="1" value={config.totalPeople}
+              onChange={e => setConfig({...config, totalPeople: Math.max(1, parseInt(e.target.value)||1)})}
+              style={{width: 56, minWidth: 0, fontSize: 18, fontFamily: 'Shippori Mincho, serif', padding: '4px 6px', textAlign: 'center'}} />
+            <span style={{fontFamily: 'Shippori Mincho, serif', fontSize: 18}}>名</span>
           </div>
         </div>
 
         <details>
           <summary>勉強会の日 (デフォルト: 第3木曜日)</summary>
           <DateListEditor dates={config.studyDays} onAdd={addStudyDay} onRemove={removeStudyDay}
-            year={nextYear} month={nextMonth} />
+            year={nextYear} month={nextMonth} defaultDate={getThirdThursday(nextYear, nextMonth)} />
         </details>
 
         <details>
@@ -820,8 +822,8 @@ function NameSection({ names, currentName, onSelect, onAdd, onDelete }) {
   );
 }
 
-function DateListEditor({ dates, onAdd, onRemove, year, month }) {
-  const [input, setInput] = useState(fmtDate(year, month, 1));
+function DateListEditor({ dates, onAdd, onRemove, year, month, defaultDate }) {
+  const [input, setInput] = useState(defaultDate || fmtDate(year, month, 1));
   return (
     <>
       <div className="row" style={{marginBottom: 12}}>
@@ -896,7 +898,9 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
               if (excluded) {
                 return <td key={i} className="excluded">
                   <div className={`date-num ${dateClass}`}>{d}</div>
-                  <div className="excluded-label">{excluded}</div>
+                  <div className="cell-inner">
+                    <div className="excluded-label">{excluded}</div>
+                  </div>
                 </td>;
               }
               const slots = dow === 6 ? SLOTS_SATURDAY : SLOTS_WEEKDAY;
@@ -904,16 +908,34 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
               return (
                 <td key={i}>
                   <div className={`date-num ${dateClass}`}>{d}</div>
-                  {mode === 'select' && slots.map(slot => {
-                    const key = `${ds}_${slot}`;
-                    const mark = currentName && responses[currentName]?.answers[key] || 'cross';
-                    return (
-                      <div key={slot} className={`slot ${isSolo ? 'solo' : ''}`} onClick={() => currentName && onMark(ds, slot, cycleMark(mark))}>
-                        {!isSolo && <span className="slot-label">{SLOT_LABEL[slot]}</span>}
-                        <span className={`slot-mark ${mark}`}>{markChar(mark)}</span>
-                      </div>
-                    );
-                  })}
+                  <div className="cell-inner">
+                  {mode === 'select' && (isSolo ? (
+                    slots.map(slot => {
+                      const key = `${ds}_${slot}`;
+                      const mark = currentName && responses[currentName]?.answers[key] || 'cross';
+                      return (
+                        <div key={slot} className="slot solo" onClick={() => currentName && onMark(ds, slot, cycleMark(mark))}>
+                          <span className={`slot-mark ${mark}`}>{markChar(mark)}</span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    // 土曜: ラベル左、選択枠は右の余白の中央。3行をグループでまとめてセル中央へ
+                    <div className="slot-rows-group">
+                      {slots.map(slot => {
+                        const key = `${ds}_${slot}`;
+                        const mark = currentName && responses[currentName]?.answers[key] || 'cross';
+                        return (
+                          <div key={slot} className="slot-row">
+                            <span className="slot-row-label">{SLOT_LABEL[slot]}:</span>
+                            <div className="slot in-row" onClick={() => currentName && onMark(ds, slot, cycleMark(mark))}>
+                              <span className={`slot-mark ${mark}`}>{markChar(mark)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                   {mode === 'combined' && (
                     <div className="combined-cell">
                       {slots.map(slot => {
@@ -922,15 +944,15 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                           .map(([n, r]) => [n, r.answers?.[key] || 'cross'])
                           .filter(([, m]) => m !== 'cross');
                         if (dow === 6) {
-                          // 土曜: 「午前: ◯田中、△鈴木」のインライン表示
+                          // 土曜: 「午前: [◯田中] [△鈴木]」(ラベル左、名前は右枠内の中央配置)
                           return (
                             <div key={slot} className="sat-line">
                               <span className="sat-label">{SLOT_LABEL[slot]}:</span>
-                              {respList.map(([n, m], i) => (
-                                <span key={n} className={`sat-name ${m}`}>
-                                  {markChar(m)}{n}{i < respList.length - 1 ? '、' : ''}
-                                </span>
-                              ))}
+                              <span className="sat-names-wrap">
+                                {respList.map(([n, m]) => (
+                                  <span key={n} className={`sat-name ${m}`}>{markChar(m)}{n}</span>
+                                ))}
+                              </span>
                             </div>
                           );
                         }
@@ -956,11 +978,11 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                           return (
                             <div key={slot} className="sat-line">
                               <span className="sat-label">{SLOT_LABEL[slot]}:</span>
-                              {people.map((n, i) => (
-                                <span key={n} className="sat-name sat-name-decided">
-                                  {n}{i < people.length - 1 ? '、' : ''}
-                                </span>
-                              ))}
+                              <span className="sat-names-wrap">
+                                {people.map(n => (
+                                  <span key={n} className="sat-name sat-name-decided">{n}</span>
+                                ))}
+                              </span>
                             </div>
                           );
                         }
@@ -973,6 +995,7 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                       })}
                     </div>
                   )}
+                  </div>
                 </td>
               );
             })}
@@ -1000,12 +1023,10 @@ function ResultPage({ year, month, validDates, config, responses, decided, allSu
       <header>
         <div className="topbar">
           <div>
-            <h1>確定シフト (暫定)</h1>
-            <div className="subtitle">DECIDED SHIFT — {year}年 {month}月分</div>
+            <h1>シフト表（暫定）</h1>
           </div>
           <div className="progress">{responseCount} 名分の回答に基づく</div>
         </div>
-        <div className="ornament">⁂ ⁂ ⁂</div>
       </header>
 
       {!allSubmitted && (
@@ -1030,7 +1051,10 @@ function ResultPage({ year, month, validDates, config, responses, decided, allSu
           <div key={n} className="summary-box">
             <div className="summary-name">{n}<span className="summary-count">{shiftCount[n] || 0} 枠</span></div>
             <div className="summary-dates">
-              {[...dates].sort().map(d => d.split('-').slice(1).join('/')).join('  /  ')}
+              {[...dates].sort().map((d, i, arr) => {
+                const day = parseInt(d.split('-')[2]);
+                return <span key={d} className="date-chip">{day}{i < arr.length - 1 ? '、' : ''}</span>;
+              })}
             </div>
           </div>
         ))}

@@ -103,8 +103,8 @@
   /* 土曜: ラベル左、名前は右枠内の中央配置 */
   .combined-cell .sat-line { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
   .combined-cell .sat-line .sat-label { text-align: left; margin-right: 0; }
-  .combined-cell .sat-line .sat-names-wrap { text-align: center; }
-  .combined-cell .sat-line .sat-names-row { display: flex; justify-content: center; flex-wrap: nowrap; gap: 3px; }
+  .combined-cell .sat-line .sat-names-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .combined-cell .sat-line .sat-names-row { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .combined-cell .sat-line .sat-names-row .sat-name { margin: 0; }
   .combined-cell .name-tag { font-size: clamp(12px, 1.4vw, 15px); padding: 2px 8px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-block; font-weight: 500; }
   .name-tag.circle { background: #d8ebd8; color: var(--ok); }
@@ -119,7 +119,8 @@
   /* シフト表 土曜: ラベルは左揃え、名前は残りスペースの中央配置 */
   .decided-cell .sat-line { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
   .decided-cell .sat-line .sat-label { text-align: left; margin-right: 0; }
-  .decided-cell .sat-line .sat-names-wrap { text-align: center; }
+  .decided-cell .sat-line .sat-names-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .decided-cell .sat-line .sat-names-wrap .sat-name { margin: 0; }
   .decided-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 32px; flex-shrink: 0; }
   .decided-cell .assigned-name { font-size: clamp(12px, 1.4vw, 15px); background: var(--select); padding: 2px 8px; border-radius: 2px; color: var(--ink); font-weight: 500; white-space: nowrap; display: inline-block; margin: 0 3px 3px 0; }
   /* 土曜セル: 「午前: 名前、名前」のインライン表示 (縦長を抑える) */
@@ -213,7 +214,7 @@ const getNextMonth = () => {
 const SLOTS_WEEKDAY = ['pm'];
 const SLOTS_SATURDAY = ['am', 'noon', 'pm'];
 const SLOT_LABEL = { am: '午前', noon: '正午', pm: '午後' };
-const SLOT_CAPACITY = { am_sat: 1, noon_sat: 1, pm_sat: 2, pm_weekday: 2 };
+const SLOT_CAPACITY = { am_sat: 1, noon_sat: 2, pm_sat: 2, pm_weekday: 2 };
 
 const getThirdThursday = (year, month) => {
   let count = 0;
@@ -338,13 +339,20 @@ async function saveDecisionAndAutoPost(yearMonth, decided) {
 // シフト決定アルゴリズム
 // ============================================================
 function decideShifts(year, month, validDates, responses) {
-  const SATURDAY_MAX_SLOTS_PER_DAY = 2;  // 1人が「同じ土曜」で持てる枠数上限
   const assignments = {};
-  const shiftCount = {};
-  const weekShiftCount = {};
-  const saturdayDaySlots = {};   // { name: { 'YYYY-MM-DD': count } }
+  const shiftCount = {};      // 枠数 (表示用; 1スロット=1)
+  const dayCount = {};        // 出勤日数 (公平性判定用; 1日=1)
+  const amCount = {};         // 午前に入った回数 (公平性2用)
+  const weekDayCount = {};    // 週ごとの出勤日数 (maxPerWeek 用)
+  const daysAssigned = {};    // { name: Set<'YYYY-MM-DD'> }
   const names = Object.keys(responses);
-  names.forEach(n => { shiftCount[n] = 0; weekShiftCount[n] = {}; saturdayDaySlots[n] = {}; });
+  names.forEach(n => {
+    shiftCount[n] = 0;
+    dayCount[n] = 0;
+    amCount[n] = 0;
+    weekDayCount[n] = {};
+    daysAssigned[n] = new Set();
+  });
 
   const monthStart = new Date(year, month - 1, 1);
   const getWeekNum = (date) => Math.floor((date - monthStart) / (7 * 86400000));
@@ -354,7 +362,11 @@ function decideShifts(year, month, validDates, responses) {
     if (!r) return false;
     if (r.maxPerWeek !== null && r.maxPerWeek !== undefined && r.maxPerWeek !== 'none') {
       const wk = getWeekNum(date);
-      if ((weekShiftCount[name][wk] || 0) >= Number(r.maxPerWeek)) return false;
+      const ds = fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate());
+      // 既にその日に入っていれば追加してもカウントは増えない
+      if (!daysAssigned[name].has(ds)) {
+        if ((weekDayCount[name][wk] || 0) >= Number(r.maxPerWeek)) return false;
+      }
     }
     return true;
   };
@@ -365,110 +377,161 @@ function decideShifts(year, month, validDates, responses) {
     if (!assignments[key]) assignments[key] = [];
     assignments[key].push(name);
     shiftCount[name]++;
-    const wk = getWeekNum(date);
-    weekShiftCount[name][wk] = (weekShiftCount[name][wk] || 0) + 1;
-    if (date.getDay() === 6) {
-      saturdayDaySlots[name][ds] = (saturdayDaySlots[name][ds] || 0) + 1;
+    if (slot === 'am') amCount[name]++;
+    if (!daysAssigned[name].has(ds)) {
+      daysAssigned[name].add(ds);
+      dayCount[name]++;
+      const wk = getWeekNum(date);
+      weekDayCount[name][wk] = (weekDayCount[name][wk] || 0) + 1;
     }
   };
 
-  // 土曜の枠ピック時のコスト:
-  //   am  → 「am=○or△ AND noon=○or△」なら自動で正午も埋まるのでcost2、そうでなければcost1
-  //   noon → 「noon=○or△ AND pm=○or△」なら自動で午後も埋まるのでcost2、そうでなければcost1
-  //   pm  → 単独なのでcost1
   const isAvailableAt = (n, ds, slot) => {
     const m = responses[n].answers[`${ds}_${slot}`];
     return m === 'circle' || m === 'triangle';
   };
-  const satCostForPick = (n, slot, ds) => {
-    if (slot === 'am')   return (isAvailableAt(n, ds, 'am')   && isAvailableAt(n, ds, 'noon')) ? 2 : 1;
-    if (slot === 'noon') return (isAvailableAt(n, ds, 'noon') && isAvailableAt(n, ds, 'pm'))   ? 2 : 1;
-    return 1;
-  };
 
-  const eligibles = (date, slot, mark, exclude) => {
+  // ============ 平日アルゴリズム (既存ロジック踏襲、公平性は dayCount) ============
+  const eligiblesWeekday = (date, slot, mark, exclude) => {
     const ds = fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate());
     const key = `${ds}_${slot}`;
     return names
       .filter(n => !exclude.includes(n))
       .filter(n => responses[n].answers[key] === mark)
-      .filter(n => canAssign(n, date))
-      .filter(n => {
-        if (date.getDay() !== 6) return true;
-        const cur = saturdayDaySlots[n][ds] || 0;
-        return cur + satCostForPick(n, slot, ds) <= SATURDAY_MAX_SLOTS_PER_DAY;
-      });
+      .filter(n => canAssign(n, date));
   };
-
   const sortByLoadAndRandom = (arr) => arr.sort((a,b) => {
-    const d = shiftCount[a] - shiftCount[b];
+    const d = dayCount[a] - dayCount[b];
     return d !== 0 ? d : Math.random() - 0.5;
   });
-
-  const sortWithPref = (arr, date, preferredSide) => arr.sort((a,b) => {
-    const ra = responses[a], rb = responses[b];
-    const sa = ra.saturdayPref === preferredSide ? -2 : (ra.saturdayPref && ra.saturdayPref !== 'none' ? 2 : 0);
-    const sb = rb.saturdayPref === preferredSide ? -2 : (rb.saturdayPref && rb.saturdayPref !== 'none' ? 2 : 0);
-    if (sa !== sb) return sa - sb;
-    const d = shiftCount[a] - shiftCount[b];
-    return d !== 0 ? d : Math.random() - 0.5;
-  });
-
-  const pickWithFallback = (date, slot, capacity, exclude, preferredSide = null) => {
-    let circles = eligibles(date, slot, 'circle', exclude);
-    preferredSide ? sortWithPref(circles, date, preferredSide) : sortByLoadAndRandom(circles);
+  const pickWeekday = (date, slot, capacity, exclude) => {
+    let circles = eligiblesWeekday(date, slot, 'circle', exclude);
+    sortByLoadAndRandom(circles);
     let selected = circles.slice(0, capacity);
     if (selected.length < capacity) {
-      const triangles = eligibles(date, slot, 'triangle', [...exclude, ...selected]);
+      const triangles = eligiblesWeekday(date, slot, 'triangle', [...exclude, ...selected]);
       sortByLoadAndRandom(triangles);
       selected = selected.concat(triangles.slice(0, capacity - selected.length));
     }
     return selected;
   };
 
+  // ============ 土曜アルゴリズム (刷新) ============
+  // 4種の組合せ: am-only / am+noon / noon+pm / pm-only
+  // 枠: am=1, noon=2, pm=2
+  // 優先順位: 人数最大化 > ○優先 > 公平性 > アンケート > ランダム
+  const solveSaturday = (date) => {
+    const ds = fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate());
+    // 各人の出勤可能スロット
+    const elig = {};
+    for (const n of names) {
+      if (!canAssign(n, date)) { elig[n] = null; continue; }
+      const amM = responses[n].answers[`${ds}_am`];
+      const noonM = responses[n].answers[`${ds}_noon`];
+      const pmM = responses[n].answers[`${ds}_pm`];
+      const amOk = amM === 'circle' || amM === 'triangle';
+      const noonOk = noonM === 'circle' || noonM === 'triangle';
+      const pmOk = pmM === 'circle' || pmM === 'triangle';
+      elig[n] = { amOk, noonOk, pmOk, amM, noonM, pmM };
+    }
+    const amOnlyCands = names.filter(n => elig[n] && elig[n].amOk);
+    const amNoonCands = names.filter(n => elig[n] && elig[n].amOk && elig[n].noonOk);
+    const noonPmCands = names.filter(n => elig[n] && elig[n].noonOk && elig[n].pmOk);
+    const pmOnlyCands = names.filter(n => elig[n] && elig[n].pmOk);
+
+    // (a, b, c, d): am-only, am+noon, noon+pm, pm-only の人数
+    // a+b<=1, b+c<=2, c+d<=2
+    const patterns = [];
+    for (let a = 0; a <= 1; a++) {
+      for (let b = 0; b <= 1 - a; b++) {
+        for (let c = 0; c <= 2 - b; c++) {
+          for (let d = 0; d <= 2 - c; d++) {
+            patterns.push({ a, b, c, d, total: a + b + c + d });
+          }
+        }
+      }
+    }
+    patterns.sort((x, y) => y.total - x.total);
+
+    const pickK = (cands, k, exclude) => {
+      const available = cands.filter(c => !exclude.has(c));
+      if (k > available.length) return [];
+      const results = [];
+      const rec = (start, cur) => {
+        if (cur.length === k) { results.push([...cur]); return; }
+        for (let i = start; i < available.length; i++) {
+          cur.push(available[i]);
+          rec(i + 1, cur);
+          cur.pop();
+        }
+      };
+      rec(0, []);
+      return results;
+    };
+
+    const scoreAssignment = (pat, asn) => {
+      // [-people, -slots, triangles, daySum, surveyMisses, amSum, random]: 小さいほど良い
+      // 順位: 人数最大 → 枠数最大 → ○優先 → 公平性1(出勤日数) → アンケート → 公平性2(午前回数) → ランダム
+      let triangles = 0, daySum = 0, surveyMisses = 0, amSum = 0;
+      const addPerson = (n, slotsOfPerson, preferSlot) => {
+        for (const s of slotsOfPerson) {
+          if (elig[n][s + 'M'] === 'triangle') triangles++;
+          if (s === 'am') amSum += amCount[n] || 0;
+        }
+        daySum += dayCount[n] || 0;
+        const pref = responses[n].saturdayPref;
+        if (pref && pref !== 'none' && pref !== preferSlot) surveyMisses++;
+      };
+      for (const n of asn.amOnly) addPerson(n, ['am'], 'am');
+      for (const n of asn.amNoon) addPerson(n, ['am', 'noon'], 'am');
+      for (const n of asn.noonPm) addPerson(n, ['noon', 'pm'], 'pm');
+      for (const n of asn.pmOnly) addPerson(n, ['pm'], 'pm');
+      const slots = pat.a + 2 * pat.b + 2 * pat.c + pat.d;
+      return [-pat.total, -slots, triangles, daySum, surveyMisses, amSum, Math.random()];
+    };
+
+    const cmpScore = (x, y) => {
+      for (let i = 0; i < x.length; i++) {
+        if (x[i] !== y[i]) return x[i] - y[i];
+      }
+      return 0;
+    };
+
+    let best = null;
+    for (const pat of patterns) {
+      if (best && pat.total < best.total) break;  // 人数最大化が最優先 (patterns は total 降順)
+      const empty = new Set();
+      for (const amOnly of pickK(amOnlyCands, pat.a, empty)) {
+        const u1 = new Set(amOnly);
+        for (const amNoon of pickK(amNoonCands, pat.b, u1)) {
+          const u2 = new Set([...u1, ...amNoon]);
+          for (const noonPm of pickK(noonPmCands, pat.c, u2)) {
+            const u3 = new Set([...u2, ...noonPm]);
+            for (const pmOnly of pickK(pmOnlyCands, pat.d, u3)) {
+              const asn = { amOnly, amNoon, noonPm, pmOnly };
+              const score = scoreAssignment(pat, asn);
+              if (!best || cmpScore(score, best.score) < 0) {
+                best = { assignment: asn, total: pat.total, score };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return best ? best.assignment : { amOnly: [], amNoon: [], noonPm: [], pmOnly: [] };
+  };
+
   validDates.forEach(date => {
     if (date.getDay() === 6) {
-      // 土曜日:
-      //   ・午前選出の人 → 「午前も正午も○」のときだけ自動で正午にも入る
-      //   ・正午選出の人 → 「正午も午後も○」のときだけ自動で午後にも入る
-      //   ・1人につき同日2枠まで (eligibles の satCost で担保)
-      const ds = fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate());
-
-      // 午前 (定員1)
-      const am = pickWithFallback(date, 'am', 1, [], 'am');
-      am.forEach(n => record(n, date, 'am'));
-      // 自動で正午にも入れるのは「両方○または△」(✕でない) の人だけ
-      am.forEach(n => {
-        if (isAvailableAt(n, ds, 'am') && isAvailableAt(n, ds, 'noon')) {
-          record(n, date, 'noon');
-        }
-      });
-
-      // 正午: まだ空きがあれば別途選出 (午前枠の人は除外)
-      let noonOnly = [];
-      const currentNoon = (assignments[`${ds}_noon`] || []).slice();
-      if (currentNoon.length === 0) {
-        noonOnly = pickWithFallback(date, 'noon', 1, am);
-        noonOnly.forEach(n => record(n, date, 'noon'));
-        // 自動で午後にも入れるのは「両方○または△」の人だけ
-        noonOnly.forEach(n => {
-          if (isAvailableAt(n, ds, 'noon') && isAvailableAt(n, ds, 'pm')) {
-            record(n, date, 'pm');
-          }
-        });
-      }
-
-      // 午後: 残り定員 (定員2)
-      const currentPm = (assignments[`${ds}_pm`] || []).slice();
-      const remainPm = 2 - currentPm.length;
-      if (remainPm > 0) {
-        const exclude = [...am, ...noonOnly, ...currentPm];
-        const pm = pickWithFallback(date, 'pm', remainPm, exclude, 'pm');
-        pm.forEach(n => record(n, date, 'pm'));
-      }
+      const sat = solveSaturday(date);
+      sat.amOnly.forEach(n => record(n, date, 'am'));
+      sat.amNoon.forEach(n => { record(n, date, 'am'); record(n, date, 'noon'); });
+      sat.noonPm.forEach(n => { record(n, date, 'noon'); record(n, date, 'pm'); });
+      sat.pmOnly.forEach(n => record(n, date, 'pm'));
     } else {
       // 平日: 午後のみ, 定員2
-      const selected = pickWithFallback(date, 'pm', 2, []);
+      const selected = pickWeekday(date, 'pm', 2, []);
       selected.forEach(n => record(n, date, 'pm'));
     }
   });

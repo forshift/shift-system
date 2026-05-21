@@ -96,14 +96,17 @@
   .combined-cell .slot-line { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; }
   /* 平日: 名前を幅の中央(50%)に正確に配置。pxを使わず gap も % で表現してスマホで揺れないように */
   .combined-cell .slot-line.solo { display: block; }
-  .combined-cell .slot-line.solo > span { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 4% 4%; width: 100%; }
+  .combined-cell .slot-line.solo > span { display: block; width: 100%; }
+  .combined-cell .slot-line.solo .name-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 4% 4%; width: 100%; }
   .combined-cell .slot-line.solo .name-tag { margin: 0; }
   .combined-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 28px; flex-shrink: 0; }
   /* 土曜: ラベル左、名前は右枠内の中央配置 */
   .combined-cell .sat-line { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
   .combined-cell .sat-line .sat-label { text-align: left; margin-right: 0; }
   .combined-cell .sat-line .sat-names-wrap { text-align: center; }
-  .combined-cell .name-tag { font-size: clamp(11px, 1.2vw, 14px); padding: 2px 6px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-block; }
+  .combined-cell .sat-line .sat-names-row { display: flex; justify-content: center; flex-wrap: nowrap; gap: 3px; }
+  .combined-cell .sat-line .sat-names-row .sat-name { margin: 0; }
+  .combined-cell .name-tag { font-size: clamp(12px, 1.4vw, 15px); padding: 2px 8px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-block; font-weight: 500; }
   .name-tag.circle { background: #d8ebd8; color: var(--ok); }
   .name-tag.triangle { background: #f3e2c8; color: var(--warn); }
   .name-tag.cross { background: #f0d8d8; color: var(--accent); }
@@ -122,7 +125,7 @@
   /* 土曜セル: 「午前: 名前、名前」のインライン表示 (縦長を抑える) */
   .sat-line { display: block; line-height: 1.7; margin-bottom: 4px; font-size: clamp(12px, 1.4vw, 15px); }
   .sat-line .sat-label { color: var(--ink-muted); font-weight: 600; margin-right: 4px; }
-  .sat-line .sat-name { white-space: nowrap; display: inline-block; vertical-align: top; padding: 2px 8px; border-radius: 2px; margin: 0 3px 3px 0; }
+  .sat-line .sat-name { white-space: nowrap; display: inline-block; vertical-align: top; padding: 2px 8px; border-radius: 2px; margin: 0 3px 3px 0; font-weight: 600; }
   .sat-line .sat-name.circle { background: #d8ebd8; color: var(--ok); }
   .sat-line .sat-name.triangle { background: #f3e2c8; color: var(--warn); }
   .sat-line .sat-name.cross { background: #f0d8d8; color: var(--accent); }
@@ -794,7 +797,10 @@ function App() {
       {/* 全員の回答カレンダー */}
       <section className="card">
         <h2>全員の回答状況</h2>
-        <div className="info">○: 参加可 △: 補欠可 ✕: 不可 — 各日各枠で他のメンバーの選択を確認できます</div>
+        <div className="legend" style={{flexDirection: 'column', alignItems: 'flex-start', gap: 8}}>
+          <div className="legend-item"><span className="name-tag circle" style={{margin: 0, minWidth: 32}}>&nbsp;</span> ：○ (参加可能)</div>
+          <div className="legend-item"><span className="name-tag triangle" style={{margin: 0, minWidth: 32}}>&nbsp;</span> ：△ (他に2人いなければ参加)</div>
+        </div>
         <div className="month-header">{nextYear}年 {nextMonth}月</div>
         <Calendar
           year={nextYear} month={nextMonth} config={config}
@@ -948,15 +954,28 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                         const respList = Object.entries(responses)
                           .map(([n, r]) => [n, r.answers?.[key] || 'cross'])
                           .filter(([, m]) => m !== 'cross');
+                        const circles = respList.filter(([, m]) => m === 'circle');
+                        const triangles = respList.filter(([, m]) => m === 'triangle');
                         if (dow === 6) {
-                          // 土曜: 「午前: [◯田中] [△鈴木]」(ラベル左、名前は右枠内の中央配置)
+                          // 土曜: 「午前: [田中] [鈴木]」(ラベル左、名前は右枠内の中央配置、緑→オレンジ縦並び)
                           return (
                             <div key={slot} className="sat-line">
                               <span className="sat-label">{SLOT_LABEL[slot]}:</span>
                               <span className="sat-names-wrap">
-                                {respList.map(([n, m]) => (
-                                  <span key={n} className={`sat-name ${m}`}>{markChar(m)}{n}</span>
-                                ))}
+                                {circles.length > 0 && (
+                                  <div className="sat-names-row">
+                                    {circles.map(([n, m]) => (
+                                      <span key={n} className={`sat-name ${m}`}>{n}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                {triangles.length > 0 && (
+                                  <div className="sat-names-row">
+                                    {triangles.map(([n, m]) => (
+                                      <span key={n} className={`sat-name ${m}`}>{n}</span>
+                                    ))}
+                                  </div>
+                                )}
                               </span>
                             </div>
                           );
@@ -965,9 +984,20 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                           <div key={slot} className={`slot-line ${isSolo ? 'solo' : ''}`}>
                             {!isSolo && <span className="slot-line-label">{SLOT_LABEL[slot]}</span>}
                             <span>
-                              {respList.map(([n, m]) => (
-                                <span key={n} className={`name-tag ${m}`}>{markChar(m)}{n}</span>
-                              ))}
+                              {circles.length > 0 && (
+                                <div className="name-row">
+                                  {circles.map(([n, m]) => (
+                                    <span key={n} className={`name-tag ${m}`}>{n}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {triangles.length > 0 && (
+                                <div className="name-row">
+                                  {triangles.map(([n, m]) => (
+                                    <span key={n} className={`name-tag ${m}`}>{n}</span>
+                                  ))}
+                                </div>
+                              )}
                             </span>
                           </div>
                         );

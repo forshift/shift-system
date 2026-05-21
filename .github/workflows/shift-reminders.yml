@@ -1,14 +1,14 @@
 name: shift-reminders
 
-# 全て JST 9:00 にトリガー (GitHub Actions は UTC なので 00:00 UTC = 09:00 JST)
+# 全て JST 11:30 にトリガー (GitHub Actions は UTC なので 02:30 UTC = 11:30 JST)
 on:
   schedule:
     # 15日: 月初の呼びかけ (URL + 締切22日)
-    - cron: '0 0 15 * *'
+    - cron: '30 2 15 * *'
     # 21日: 通常リマインド
-    - cron: '0 0 21 * *'
-    # 22〜30日 毎日: 未回答者がいれば「シフトを提出できません」(24日以降は激つよモード)
-    - cron: '0 0 22-30 * *'
+    - cron: '30 2 21 * *'
+    # 22〜30日 毎日: 未回答者がいれば「シフトを提出できません」
+    - cron: '30 2 22-30 * *'
   workflow_dispatch:
     inputs:
       endpoint:

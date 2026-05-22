@@ -64,11 +64,11 @@
   .calendar th { background: var(--ink); color: var(--bg-card); padding: clamp(6px, 1vw, 12px) clamp(2px, 0.5vw, 6px); font-size: clamp(10px, 1.2vw, 13px); font-weight: 500; letter-spacing: 0.08em; border-right: 1px solid var(--ink-soft); }
   .calendar th:last-child { border-right: none; }
   .calendar th.sat { color: #9bc3e8; }
-  /* 列幅: 月〜金は 1 単位、土は 2.5 単位 (PCもスマホも同比率)
-     -> 各平日 = 1/7.5 ≒ 13.33%, 土 = 2.5/7.5 ≒ 33.33% */
-  .calendar th:nth-child(6), .calendar td:nth-child(6) { width: 33.33%; }
+  /* 列幅: 月〜金は 1 単位、土は 2 単位 (PCもスマホも同比率)
+     -> 各平日 = 1/7 ≒ 14.29%, 土 = 2/7 ≒ 28.57% */
+  .calendar th:nth-child(6), .calendar td:nth-child(6) { width: 28.57%; }
   /* セル: tdはtable-cellのまま。内側に .cell-inner を置いて flex で空きスペース中央配置 */
-  .calendar td { border: 1px solid var(--line); padding: 0; height: clamp(70px, 11vw, 110px); width: 13.33%; background: white; position: relative; vertical-align: top; }
+  .calendar td { border: 1px solid var(--line); padding: 0; height: clamp(70px, 11vw, 110px); width: 14.29%; background: white; position: relative; vertical-align: top; }
   .cell-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; height: 100%; padding: clamp(20px, 2.5vw, 28px) clamp(2px, 0.5vw, 6px) clamp(2px, 0.5vw, 6px); }
   .cell-inner > .combined-cell,
   .cell-inner > .decided-cell,

@@ -182,7 +182,7 @@ const SUPABASE_URL = "https://boxjmdbbqlvlzokuqrzi.supabase.co";   // 例: "http
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJveGptZGJicWx2bHpva3VxcnppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNzc5MjksImV4cCI6MjA5NDY1MzkyOX0.WdvVotKAtwWzCTkX_s181vnjx0883nTtmE2VNQ2NleQ";   // anon key
 const USE_SUPABASE = true; // trueにするとSupabaseを利用 (上のscriptタグも有効化)
 const BOT_URL = "https://shift-system-ige3.onrender.com"; // 確定シフトを自動投稿させるBotのURL (末尾スラッシュなし)
-const ENABLE_LINE_POST = true; // false にすると LINE への自動投稿のみ止める (Supabase 保存は継続)
+const ENABLE_LINE_POST = false; // false にすると LINE への自動投稿のみ止める (Supabase 保存は継続)
 
 // ============================================================
 // 日本の祝日データ (内閣府CSV由来; 1年ごとに更新可能)
@@ -282,7 +282,11 @@ async function saveResponseToBackend(yearMonth, name, response) {
     submitted: !!response.submitted,
   };
   if (response.submitted) payload.submitted_at = new Date().toISOString();
-  await supabaseClient.from('responses').upsert(payload, { onConflict: 'year_month,name' });
+  const { error } = await supabaseClient.from('responses').upsert(payload, { onConflict: 'year_month,name' });
+  if (error) {
+    console.error('saveResponseToBackend error:', error);
+    throw error;
+  }
 }
 
 async function saveConfigToBackend(yearMonth, config) {
@@ -795,12 +799,18 @@ function App() {
   };
 
   // 送信ボタン: page 2 へ
-  const onSubmit = () => {
+  const onSubmit = async () => {
     if (!currentName) { alert('まず名前を選択してください'); return; }
     const submittedMe = {...(responses[currentName]||{ answers: {}, maxPerWeek: 'none', saturdayPref: 'none', isBeginner: false }), submitted: true};
     setResponses(prev => ({...prev, [currentName]: submittedMe}));
-    // debounce を待たず即座に Supabase へ保存 (画面遷移で消える前に確実に永続化)
-    saveResponseToBackend(ymKey, currentName, submittedMe).catch(e => console.error('onSubmit save:', e));
+    // 画面遷移前に Supabase 保存を完了させる
+    try {
+      await saveResponseToBackend(ymKey, currentName, submittedMe);
+    } catch (e) {
+      console.error('onSubmit save failed:', e);
+      alert('回答の保存に失敗しました。もう一度送信ボタンを押してください。\n' + (e?.message || e));
+      return;
+    }
     computeAndShow();
   };
   const computeAndShow = () => {

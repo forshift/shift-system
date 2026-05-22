@@ -109,7 +109,7 @@
   .combined-cell .sat-line .sat-names-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .combined-cell .sat-line .sat-names-row { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .combined-cell .sat-line .sat-names-row .sat-name { margin: 0; }
-  .combined-cell .name-tag { font-size: var(--name-font); padding: 2px 8px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; font-weight: 500; width: var(--name-box-width); height: var(--name-box-height); box-sizing: border-box; }
+  .combined-cell .name-tag { font-size: var(--name-font); padding: 2px 2px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; font-weight: 500; width: var(--name-box-width); height: var(--name-box-height); box-sizing: border-box; }
   .name-tag.circle { background: #d8ebd8; color: var(--ok); }
   .name-tag.triangle { background: #f3e2c8; color: var(--warn); }
   .name-tag.cross { background: #f0d8d8; color: var(--accent); }
@@ -125,11 +125,11 @@
   .decided-cell .sat-line .sat-names-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .decided-cell .sat-line .sat-names-wrap .sat-name { margin: 0; }
   .decided-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 32px; flex-shrink: 0; }
-  .decided-cell .assigned-name { font-size: var(--name-font); background: var(--select); padding: 2px 8px; border-radius: 2px; color: var(--ink); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; margin: 0 3px 3px 0; width: var(--name-box-width); height: var(--name-box-height); box-sizing: border-box; }
+  .decided-cell .assigned-name { font-size: var(--name-font); background: var(--select); padding: 2px 2px; border-radius: 2px; color: var(--ink); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; margin: 0 3px 3px 0; width: var(--name-box-width); height: var(--name-box-height); box-sizing: border-box; }
   /* 土曜セル: 「午前: 名前、名前」のインライン表示 (縦長を抑える) */
   .sat-line { display: block; line-height: 1.7; margin-bottom: 4px; font-size: clamp(12px, 1.4vw, 15px); }
   .sat-line .sat-label { color: var(--ink-muted); font-weight: 600; margin-right: 4px; }
-  .sat-line .sat-name { white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; vertical-align: top; padding: 2px 8px; border-radius: 2px; margin: 0 3px 3px 0; font-weight: 600; font-size: var(--name-font); width: var(--name-box-width); height: var(--name-box-height); box-sizing: border-box; }
+  .sat-line .sat-name { white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; vertical-align: top; padding: 2px 2px; border-radius: 2px; margin: 0 3px 3px 0; font-weight: 600; font-size: var(--name-font); width: var(--name-box-width); height: var(--name-box-height); box-sizing: border-box; }
   .sat-line .sat-name.circle { background: #d8ebd8; color: var(--ok); }
   .sat-line .sat-name.triangle { background: #f3e2c8; color: var(--warn); }
   .sat-line .sat-name.cross { background: #f0d8d8; color: var(--accent); }
@@ -233,9 +233,9 @@ const cycleMark = (m, skipCircle = false) => {
   return m === 'cross' ? 'circle' : m === 'circle' ? 'triangle' : 'cross';
 };
 const markChar = (m) => m === 'circle' ? '◯' : m === 'triangle' ? '△' : '✕';
-// 名前が3文字以上のとき、枠内に収まるようフォントを縮小
+// 名前が3文字以上のとき、枠内に収まるようフォントを縮小 (padding 2px に合わせ広め)
 const nameFontStyle = (name) => name.length > 2
-  ? { fontSize: `calc(var(--name-font) * 2 / ${name.length})` }
+  ? { fontSize: `calc(var(--name-font) * 2.6 / ${name.length})` }
   : null;
 
 // ============================================================

@@ -182,6 +182,7 @@ const SUPABASE_URL = "https://boxjmdbbqlvlzokuqrzi.supabase.co";   // 例: "http
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJveGptZGJicWx2bHpva3VxcnppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNzc5MjksImV4cCI6MjA5NDY1MzkyOX0.WdvVotKAtwWzCTkX_s181vnjx0883nTtmE2VNQ2NleQ";   // anon key
 const USE_SUPABASE = true; // trueにするとSupabaseを利用 (上のscriptタグも有効化)
 const BOT_URL = "https://shift-system-ige3.onrender.com"; // 確定シフトを自動投稿させるBotのURL (末尾スラッシュなし)
+const ENABLE_LINE_POST = false; // false にすると LINE への自動投稿のみ止める (Supabase 保存は継続)
 
 // ============================================================
 // 日本の祝日データ (内閣府CSV由来; 1年ごとに更新可能)
@@ -340,6 +341,11 @@ async function saveDecisionAndAutoPost(yearMonth, decided) {
   const { error } = await supabaseClient.from('decisions').upsert(payload, { onConflict: 'year_month' });
   if (error) { console.error('decisions upsert error:', error); return; }
 
+  if (!ENABLE_LINE_POST) {
+    console.log('ENABLE_LINE_POST=false: skip LINE auto-post');
+    return;
+  }
+
   try {
     const resp = await fetch(`${BOT_URL}/api/auto-post-decision`, { method: 'POST' });
     const data = await resp.json().catch(() => ({}));
@@ -487,8 +493,8 @@ function decideShifts(year, month, validDates, responses) {
     };
 
     const scoreAssignment = (pat, asn) => {
-      // [-people, -slotTypes, -slots, triangles, daySum, surveyMisses, amSum, random]: 小さいほど良い
-      // 順位: 人数最大 → カバー時間帯数最大(満遍なく) → 枠数最大 → ○優先 → 公平性1 → アンケート → 公平性2(午前回数) → ランダム
+      // [-people, amOnlyCount, -slotTypes, -slots, triangles, daySum, surveyMisses, amSum, random]: 小さいほど良い
+      // 順位: 人数最大 → 午前のみ回避 → カバー時間帯数最大(満遍なく) → 枠数最大 → ○優先 → 公平性1 → アンケート → 公平性2(午前回数) → ランダム
       let triangles = 0, daySum = 0, surveyMisses = 0, amSum = 0;
       const addPerson = (n, slotsOfPerson) => {
         for (const s of slotsOfPerson) {
@@ -497,7 +503,6 @@ function decideShifts(year, month, validDates, responses) {
         }
         daySum += dayCount[n] || 0;
         const pref = responses[n].saturdayPref;
-        // 希望スロットが組合せに含まれていなければ miss
         if (pref && pref !== 'none' && !slotsOfPerson.includes(pref)) surveyMisses++;
       };
       for (const n of asn.amOnly) addPerson(n, ['am']);
@@ -509,7 +514,7 @@ function decideShifts(year, month, validDates, responses) {
       const pmFilled = (pat.c > 0 || pat.d > 0) ? 1 : 0;
       const slotTypes = amFilled + noonFilled + pmFilled;
       const slots = pat.a + 2 * pat.b + 2 * pat.c + pat.d;
-      return [-pat.total, -slotTypes, -slots, triangles, daySum, surveyMisses, amSum, Math.random()];
+      return [-pat.total, pat.a, -slotTypes, -slots, triangles, daySum, surveyMisses, amSum, Math.random()];
     };
 
     const cmpScore = (x, y) => {
@@ -567,13 +572,20 @@ function decideShifts(year, month, validDates, responses) {
       const amOk = isAvailableAt(beg, ds, 'am');
       const noonOk = isAvailableAt(beg, ds, 'noon');
       const pmOk = isAvailableAt(beg, ds, 'pm');
-      // 4組合せのうち利用可能なものを列挙、枠数が多いものを優先
+      // 4組合せのうち利用可能なものを列挙
       const combos = [];
       if (amOk && noonOk) combos.push(['am', 'noon']);
       if (noonOk && pmOk) combos.push(['noon', 'pm']);
-      if (amOk) combos.push(['am']);
       if (pmOk) combos.push(['pm']);
-      combos.sort((a, b) => b.length - a.length || Math.random() - 0.5);
+      if (amOk) combos.push(['am']);
+      // 優先: 枠数が多いもの → 同じ枠数なら午前のみより午後のみ
+      combos.sort((a, b) => {
+        if (a.length !== b.length) return b.length - a.length;
+        const aIsAmOnly = a.length === 1 && a[0] === 'am';
+        const bIsAmOnly = b.length === 1 && b[0] === 'am';
+        if (aIsAmOnly !== bIsAmOnly) return aIsAmOnly ? 1 : -1;
+        return Math.random() - 0.5;
+      });
       combos[0].forEach(s => record(beg, date, s));
     } else {
       record(beg, date, 'pm');
@@ -785,7 +797,10 @@ function App() {
   // 送信ボタン: page 2 へ
   const onSubmit = () => {
     if (!currentName) { alert('まず名前を選択してください'); return; }
-    setResponses(prev => ({...prev, [currentName]: {...(prev[currentName]||{}), submitted: true}}));
+    const submittedMe = {...(responses[currentName]||{ answers: {}, maxPerWeek: 'none', saturdayPref: 'none', isBeginner: false }), submitted: true};
+    setResponses(prev => ({...prev, [currentName]: submittedMe}));
+    // debounce を待たず即座に Supabase へ保存 (画面遷移で消える前に確実に永続化)
+    saveResponseToBackend(ymKey, currentName, submittedMe).catch(e => console.error('onSubmit save:', e));
     computeAndShow();
   };
   const computeAndShow = () => {

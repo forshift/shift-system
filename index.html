@@ -182,7 +182,7 @@ const SUPABASE_URL = "https://boxjmdbbqlvlzokuqrzi.supabase.co";   // 例: "http
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJveGptZGJicWx2bHpva3VxcnppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNzc5MjksImV4cCI6MjA5NDY1MzkyOX0.WdvVotKAtwWzCTkX_s181vnjx0883nTtmE2VNQ2NleQ";   // anon key
 const USE_SUPABASE = true; // trueにするとSupabaseを利用 (上のscriptタグも有効化)
 const BOT_URL = "https://shift-system-ige3.onrender.com"; // 確定シフトを自動投稿させるBotのURL (末尾スラッシュなし)
-const ENABLE_LINE_POST = false; // false にすると LINE への自動投稿のみ止める (Supabase 保存は継続)
+const ENABLE_LINE_POST = true; // false にすると LINE への自動投稿のみ止める (Supabase 保存は継続)
 
 // ============================================================
 // 日本の祝日データ (内閣府CSV由来; 1年ごとに更新可能)
@@ -938,6 +938,9 @@ function App() {
       {/* 自分のカレンダー */}
       <section className="card">
         <h2>あなたの参加可能日</h2>
+        <div style={{fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12}}>
+          土曜日　午前: 9:00〜11:30　正午: 11:30〜14:30　午後: 15:00〜18:00
+        </div>
         <Legend />
         {!currentName && <div className="warning">名前を選択すると入力できます</div>}
         <div className="month-header">{nextYear}年 {nextMonth}月</div>

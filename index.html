@@ -21,6 +21,8 @@
     --ok: #2d6a4f;
     --warn: #c77b2e;
     --select: #f5e6c4;
+    --name-font: clamp(12px, 1.4vw, 15px);
+    --name-box-width: calc(var(--name-font) * 2 + 16px);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: var(--bg); color: var(--ink); font-family: 'Noto Sans JP', sans-serif; font-weight: 400; line-height: 1.7; }
@@ -106,7 +108,7 @@
   .combined-cell .sat-line .sat-names-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .combined-cell .sat-line .sat-names-row { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .combined-cell .sat-line .sat-names-row .sat-name { margin: 0; }
-  .combined-cell .name-tag { font-size: clamp(12px, 1.4vw, 15px); padding: 2px 8px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-block; font-weight: 500; }
+  .combined-cell .name-tag { font-size: var(--name-font); padding: 2px 8px; background: var(--bg); border-radius: 2px; color: var(--ink-soft); margin: 0 3px 3px 0; white-space: nowrap; display: inline-block; font-weight: 500; width: var(--name-box-width); text-align: center; box-sizing: border-box; }
   .name-tag.circle { background: #d8ebd8; color: var(--ok); }
   .name-tag.triangle { background: #f3e2c8; color: var(--warn); }
   .name-tag.cross { background: #f0d8d8; color: var(--accent); }
@@ -122,11 +124,11 @@
   .decided-cell .sat-line .sat-names-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .decided-cell .sat-line .sat-names-wrap .sat-name { margin: 0; }
   .decided-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 32px; flex-shrink: 0; }
-  .decided-cell .assigned-name { font-size: clamp(12px, 1.4vw, 15px); background: var(--select); padding: 2px 8px; border-radius: 2px; color: var(--ink); font-weight: 500; white-space: nowrap; display: inline-block; margin: 0 3px 3px 0; }
+  .decided-cell .assigned-name { font-size: var(--name-font); background: var(--select); padding: 2px 8px; border-radius: 2px; color: var(--ink); font-weight: 500; white-space: nowrap; display: inline-block; margin: 0 3px 3px 0; width: var(--name-box-width); text-align: center; box-sizing: border-box; }
   /* 土曜セル: 「午前: 名前、名前」のインライン表示 (縦長を抑える) */
   .sat-line { display: block; line-height: 1.7; margin-bottom: 4px; font-size: clamp(12px, 1.4vw, 15px); }
   .sat-line .sat-label { color: var(--ink-muted); font-weight: 600; margin-right: 4px; }
-  .sat-line .sat-name { white-space: nowrap; display: inline-block; vertical-align: top; padding: 2px 8px; border-radius: 2px; margin: 0 3px 3px 0; font-weight: 600; }
+  .sat-line .sat-name { white-space: nowrap; display: inline-block; vertical-align: top; padding: 2px 8px; border-radius: 2px; margin: 0 3px 3px 0; font-weight: 600; font-size: var(--name-font); width: var(--name-box-width); text-align: center; box-sizing: border-box; }
   .sat-line .sat-name.circle { background: #d8ebd8; color: var(--ok); }
   .sat-line .sat-name.triangle { background: #f3e2c8; color: var(--warn); }
   .sat-line .sat-name.cross { background: #f0d8d8; color: var(--accent); }
@@ -225,8 +227,15 @@ const getThirdThursday = (year, month) => {
   return null;
 };
 
-const cycleMark = (m) => m === 'cross' ? 'circle' : m === 'circle' ? 'triangle' : 'cross';
+const cycleMark = (m, skipCircle = false) => {
+  if (skipCircle) return m === 'triangle' ? 'cross' : 'triangle';
+  return m === 'cross' ? 'circle' : m === 'circle' ? 'triangle' : 'cross';
+};
 const markChar = (m) => m === 'circle' ? '◯' : m === 'triangle' ? '△' : '✕';
+// 名前が3文字以上のとき、枠内に収まるようフォントを縮小
+const nameFontStyle = (name) => name.length > 2
+  ? { fontSize: `calc(var(--name-font) * 2 / ${name.length})` }
+  : null;
 
 // ============================================================
 // ストレージ抽象化 (localStorage または Supabase)
@@ -264,6 +273,7 @@ async function saveResponseToBackend(yearMonth, name, response) {
     answers: response.answers || {},
     max_per_week: response.maxPerWeek ?? 'none',
     saturday_pref: response.saturdayPref ?? 'none',
+    is_beginner: !!response.isBeginner,
     submitted: !!response.submitted,
   };
   if (response.submitted) payload.submitted_at = new Date().toISOString();
@@ -346,6 +356,8 @@ function decideShifts(year, month, validDates, responses) {
   const weekDayCount = {};    // 週ごとの出勤日数 (maxPerWeek 用)
   const daysAssigned = {};    // { name: Set<'YYYY-MM-DD'> }
   const names = Object.keys(responses);
+  const beginnerNames = names.filter(n => responses[n].isBeginner);
+  const regularNames = names.filter(n => !responses[n].isBeginner);
   names.forEach(n => {
     shiftCount[n] = 0;
     dayCount[n] = 0;
@@ -392,10 +404,11 @@ function decideShifts(year, month, validDates, responses) {
   };
 
   // ============ 平日アルゴリズム (既存ロジック踏襲、公平性は dayCount) ============
+  // 初心者は通常選出からは除外 (後で追加で入れる)
   const eligiblesWeekday = (date, slot, mark, exclude) => {
     const ds = fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate());
     const key = `${ds}_${slot}`;
-    return names
+    return regularNames
       .filter(n => !exclude.includes(n))
       .filter(n => responses[n].answers[key] === mark)
       .filter(n => canAssign(n, date));
@@ -422,9 +435,9 @@ function decideShifts(year, month, validDates, responses) {
   // 優先順位: 人数最大化 > ○優先 > 公平性 > アンケート > ランダム
   const solveSaturday = (date) => {
     const ds = fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate());
-    // 各人の出勤可能スロット
+    // 各人の出勤可能スロット (初心者は通常選出から除外)
     const elig = {};
-    for (const n of names) {
+    for (const n of regularNames) {
       if (!canAssign(n, date)) { elig[n] = null; continue; }
       const amM = responses[n].answers[`${ds}_am`];
       const noonM = responses[n].answers[`${ds}_noon`];
@@ -434,10 +447,10 @@ function decideShifts(year, month, validDates, responses) {
       const pmOk = pmM === 'circle' || pmM === 'triangle';
       elig[n] = { amOk, noonOk, pmOk, amM, noonM, pmM };
     }
-    const amOnlyCands = names.filter(n => elig[n] && elig[n].amOk);
-    const amNoonCands = names.filter(n => elig[n] && elig[n].amOk && elig[n].noonOk);
-    const noonPmCands = names.filter(n => elig[n] && elig[n].noonOk && elig[n].pmOk);
-    const pmOnlyCands = names.filter(n => elig[n] && elig[n].pmOk);
+    const amOnlyCands = regularNames.filter(n => elig[n] && elig[n].amOk);
+    const amNoonCands = regularNames.filter(n => elig[n] && elig[n].amOk && elig[n].noonOk);
+    const noonPmCands = regularNames.filter(n => elig[n] && elig[n].noonOk && elig[n].pmOk);
+    const pmOnlyCands = regularNames.filter(n => elig[n] && elig[n].pmOk);
 
     // (a, b, c, d): am-only, am+noon, noon+pm, pm-only の人数
     // a+b<=1, b+c<=2, c+d<=2
@@ -473,19 +486,20 @@ function decideShifts(year, month, validDates, responses) {
       // [-people, -slotTypes, -slots, triangles, daySum, surveyMisses, amSum, random]: 小さいほど良い
       // 順位: 人数最大 → カバー時間帯数最大(満遍なく) → 枠数最大 → ○優先 → 公平性1 → アンケート → 公平性2(午前回数) → ランダム
       let triangles = 0, daySum = 0, surveyMisses = 0, amSum = 0;
-      const addPerson = (n, slotsOfPerson, preferSlot) => {
+      const addPerson = (n, slotsOfPerson) => {
         for (const s of slotsOfPerson) {
           if (elig[n][s + 'M'] === 'triangle') triangles++;
           if (s === 'am') amSum += amCount[n] || 0;
         }
         daySum += dayCount[n] || 0;
         const pref = responses[n].saturdayPref;
-        if (pref && pref !== 'none' && pref !== preferSlot) surveyMisses++;
+        // 希望スロットが組合せに含まれていなければ miss
+        if (pref && pref !== 'none' && !slotsOfPerson.includes(pref)) surveyMisses++;
       };
-      for (const n of asn.amOnly) addPerson(n, ['am'], 'am');
-      for (const n of asn.amNoon) addPerson(n, ['am', 'noon'], 'am');
-      for (const n of asn.noonPm) addPerson(n, ['noon', 'pm'], 'pm');
-      for (const n of asn.pmOnly) addPerson(n, ['pm'], 'pm');
+      for (const n of asn.amOnly) addPerson(n, ['am']);
+      for (const n of asn.amNoon) addPerson(n, ['am', 'noon']);
+      for (const n of asn.noonPm) addPerson(n, ['noon', 'pm']);
+      for (const n of asn.pmOnly) addPerson(n, ['pm']);
       const amFilled = (pat.a > 0 || pat.b > 0) ? 1 : 0;
       const noonFilled = (pat.b > 0 || pat.c > 0) ? 1 : 0;
       const pmFilled = (pat.c > 0 || pat.d > 0) ? 1 : 0;
@@ -526,6 +540,42 @@ function decideShifts(year, month, validDates, responses) {
     return best ? best.assignment : { amOnly: [], amNoon: [], noonPm: [], pmOnly: [] };
   };
 
+  // 初心者を1日1人追加 (枠+1の効果)
+  // 土曜は 4組合せの中で枠数が多いものを優先
+  const addBeginnerForDate = (date) => {
+    if (beginnerNames.length === 0) return;
+    const ds = fmtDate(date.getFullYear(), date.getMonth()+1, date.getDate());
+    const cands = beginnerNames.filter(n => {
+      if (!canAssign(n, date)) return false;
+      if (date.getDay() === 6) {
+        return isAvailableAt(n, ds, 'am') || isAvailableAt(n, ds, 'noon') || isAvailableAt(n, ds, 'pm');
+      }
+      return isAvailableAt(n, ds, 'pm');
+    });
+    if (cands.length === 0) return;
+    // 公平性: dayCount少順 + ランダム
+    cands.sort((a, b) => {
+      const d = dayCount[a] - dayCount[b];
+      return d !== 0 ? d : Math.random() - 0.5;
+    });
+    const beg = cands[0];
+    if (date.getDay() === 6) {
+      const amOk = isAvailableAt(beg, ds, 'am');
+      const noonOk = isAvailableAt(beg, ds, 'noon');
+      const pmOk = isAvailableAt(beg, ds, 'pm');
+      // 4組合せのうち利用可能なものを列挙、枠数が多いものを優先
+      const combos = [];
+      if (amOk && noonOk) combos.push(['am', 'noon']);
+      if (noonOk && pmOk) combos.push(['noon', 'pm']);
+      if (amOk) combos.push(['am']);
+      if (pmOk) combos.push(['pm']);
+      combos.sort((a, b) => b.length - a.length || Math.random() - 0.5);
+      combos[0].forEach(s => record(beg, date, s));
+    } else {
+      record(beg, date, 'pm');
+    }
+  };
+
   validDates.forEach(date => {
     if (date.getDay() === 6) {
       const sat = solveSaturday(date);
@@ -538,6 +588,8 @@ function decideShifts(year, month, validDates, responses) {
       const selected = pickWeekday(date, 'pm', 2, []);
       selected.forEach(n => record(n, date, 'pm'));
     }
+    // 通常選出の後に初心者を追加
+    addBeginnerForDate(date);
   });
 
   return { assignments, shiftCount };
@@ -611,6 +663,7 @@ function App() {
                 answers: r.answers || {},
                 maxPerWeek: r.max_per_week || 'none',
                 saturdayPref: r.saturday_pref || 'none',
+                isBeginner: !!r.is_beginner,
                 submitted: !!r.submitted,
               };
             });
@@ -674,7 +727,7 @@ function App() {
   const ensureMyResponse = useCallback(() => {
     if (!currentName) return null;
     if (responses[currentName]) return responses[currentName];
-    const init = { answers: {}, maxPerWeek: 'none', saturdayPref: 'none', submitted: false };
+    const init = { answers: {}, maxPerWeek: 'none', saturdayPref: 'none', isBeginner: false, submitted: false };
     setResponses(prev => ({ ...prev, [currentName]: init }));
     return init;
   }, [currentName, responses]);
@@ -684,7 +737,7 @@ function App() {
     if (!currentName) return;
     const key = `${dateKey}_${slot}`;
     setResponses(prev => {
-      const me = prev[currentName] || { answers: {}, maxPerWeek: 'none', saturdayPref: 'none' };
+      const me = prev[currentName] || { answers: {}, maxPerWeek: 'none', saturdayPref: 'none', isBeginner: false };
       return { ...prev, [currentName]: { ...me, answers: { ...me.answers, [key]: mark } } };
     });
   };
@@ -720,7 +773,7 @@ function App() {
   const updateMyField = (field, value) => {
     if (!currentName) return;
     setResponses(prev => {
-      const me = prev[currentName] || { answers: {}, maxPerWeek: 'none', saturdayPref: 'none' };
+      const me = prev[currentName] || { answers: {}, maxPerWeek: 'none', saturdayPref: 'none', isBeginner: false };
       return { ...prev, [currentName]: { ...me, [field]: value } };
     });
   };
@@ -833,12 +886,21 @@ function App() {
             </select>
           </div>
           <div className="col">
-            <label>土曜午前と午後の両方に○の場合の希望</label>
+            <label>土曜のシフト希望</label>
             <select value={myResponse?.saturdayPref ?? 'none'} onChange={e => updateMyField('saturdayPref', e.target.value)}>
               <option value="none">特になし</option>
               <option value="am">午前を希望</option>
+              <option value="noon">正午を希望</option>
               <option value="pm">午後を希望</option>
             </select>
+          </div>
+          <div className="col">
+            <label>初心者 (土曜午前は不可・入った枠は定員+1)</label>
+            <label style={{display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer'}}>
+              <input type="checkbox" checked={!!myResponse?.isBeginner}
+                onChange={e => updateMyField('isBeginner', e.target.checked)} />
+              <span>初心者として登録する</span>
+            </label>
           </div>
         </div>
       </section>
@@ -1003,10 +1065,12 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                       {slots.map(slot => {
                         const key = `${ds}_${slot}`;
                         const mark = currentName && responses[currentName]?.answers[key] || 'cross';
+                        const isBeginner = !!(currentName && responses[currentName]?.isBeginner);
+                        const skipCircle = isBeginner && slot === 'am';
                         return (
                           <div key={slot} className="slot-row">
                             <span className="slot-row-label">{SLOT_LABEL[slot]}:</span>
-                            <div className="slot in-row" onClick={() => currentName && onMark(ds, slot, cycleMark(mark))}>
+                            <div className="slot in-row" onClick={() => currentName && onMark(ds, slot, cycleMark(mark, skipCircle))}>
                               <span className={`slot-mark ${mark}`}>{markChar(mark)}</span>
                             </div>
                           </div>
@@ -1032,14 +1096,14 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                                 {circles.length > 0 && (
                                   <div className="sat-names-row">
                                     {circles.map(([n, m]) => (
-                                      <span key={n} className={`sat-name ${m}`}>{n}</span>
+                                      <span key={n} className={`sat-name ${m}`} style={nameFontStyle(n)}>{n}</span>
                                     ))}
                                   </div>
                                 )}
                                 {triangles.length > 0 && (
                                   <div className="sat-names-row">
                                     {triangles.map(([n, m]) => (
-                                      <span key={n} className={`sat-name ${m}`}>{n}</span>
+                                      <span key={n} className={`sat-name ${m}`} style={nameFontStyle(n)}>{n}</span>
                                     ))}
                                   </div>
                                 )}
@@ -1054,14 +1118,14 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                               {circles.length > 0 && (
                                 <div className="name-row">
                                   {circles.map(([n, m]) => (
-                                    <span key={n} className={`name-tag ${m}`}>{n}</span>
+                                    <span key={n} className={`name-tag ${m}`} style={nameFontStyle(n)}>{n}</span>
                                   ))}
                                 </div>
                               )}
                               {triangles.length > 0 && (
                                 <div className="name-row">
                                   {triangles.map(([n, m]) => (
-                                    <span key={n} className={`name-tag ${m}`}>{n}</span>
+                                    <span key={n} className={`name-tag ${m}`} style={nameFontStyle(n)}>{n}</span>
                                   ))}
                                 </div>
                               )}
@@ -1082,7 +1146,7 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                               <span className="sat-label">{SLOT_LABEL[slot]}:</span>
                               <span className="sat-names-wrap">
                                 {people.map(n => (
-                                  <span key={n} className="sat-name sat-name-decided">{n}</span>
+                                  <span key={n} className="sat-name sat-name-decided" style={nameFontStyle(n)}>{n}</span>
                                 ))}
                               </span>
                             </div>
@@ -1091,7 +1155,7 @@ function Calendar({ year, month, config, responses, mode, currentName, onMark, d
                         return (
                           <div key={slot} className={`slot-line ${isSolo ? 'solo' : ''}`}>
                             {!isSolo && <span className="slot-line-label">{SLOT_LABEL[slot]}</span>}
-                            <span>{people.map(n => <span key={n} className="assigned-name">{n}</span>)}</span>
+                            <span>{people.map(n => <span key={n} className="assigned-name" style={nameFontStyle(n)}>{n}</span>)}</span>
                           </div>
                         );
                       })}

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS responses (
     -- 形式: { "2026-06-01_pm": "circle"|"triangle"|"cross", ... }
   max_per_week TEXT DEFAULT 'none',     -- 'none' | '0'..'7'
   saturday_pref TEXT DEFAULT 'none',    -- 'none' | 'am' | 'pm'
+  is_beginner BOOLEAN DEFAULT FALSE,    -- 初心者フラグ (土曜午前に○不可, 入った枠の定員+1)
   submitted BOOLEAN DEFAULT FALSE,
   submitted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS responses (
 
 CREATE INDEX IF NOT EXISTS idx_responses_ym ON responses (year_month);
 CREATE INDEX IF NOT EXISTS idx_responses_submitted ON responses (year_month, submitted);
+ALTER TABLE responses ADD COLUMN IF NOT EXISTS is_beginner BOOLEAN DEFAULT FALSE;
 
 -- 決定したシフト
 CREATE TABLE IF NOT EXISTS decisions (

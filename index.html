@@ -83,6 +83,7 @@
   /* 土曜の参加可能日カレンダー: ラベル左/選択枠は右余白の中央。3行をグループ化 */
   .slot-rows-group { display: flex; flex-direction: column; gap: 4px; }
   .slot-row { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
+  .slot-row + .slot-row { border-top: 1px dotted var(--line-strong); padding-top: 4px; }
   .slot-row-label { font-size: clamp(12px, 1.4vw, 15px); color: var(--ink-muted); font-weight: 600; text-align: left; }
   .slot.in-row { width: clamp(38px, 5vw, 50px); margin: 0 auto; justify-content: center; padding: clamp(4px, 1vw, 8px) 2px; min-height: clamp(30px, 4vw, 38px); }
   .slot.in-row .slot-mark { font-size: clamp(18px, 2.4vw, 24px); }
@@ -105,6 +106,7 @@
   .combined-cell .slot-line-label { color: var(--ink-muted); font-weight: 500; min-width: 28px; flex-shrink: 0; }
   /* 土曜: ラベル左、名前は右枠内の中央配置 */
   .combined-cell .sat-line { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
+  .combined-cell .sat-line + .sat-line { border-top: 1px dotted var(--line-strong); padding-top: 4px; }
   .combined-cell .sat-line .sat-label { text-align: left; margin-right: 0; }
   .combined-cell .sat-line .sat-names-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .combined-cell .sat-line .sat-names-row { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -121,6 +123,7 @@
   .decided-cell .slot-line.solo .assigned-name { margin: 0; }
   /* シフト表 土曜: ラベルは左揃え、名前は残りスペースの中央配置 */
   .decided-cell .sat-line { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
+  .decided-cell .sat-line + .sat-line { border-top: 1px dotted var(--line-strong); padding-top: 4px; }
   .decided-cell .sat-line .sat-label { text-align: left; margin-right: 0; }
   .decided-cell .sat-line .sat-names-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .decided-cell .sat-line .sat-names-wrap .sat-name { margin: 0; }

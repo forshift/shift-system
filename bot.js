@@ -28,6 +28,12 @@ const client = new Client(config);
 const app = express();
 
 // ============================================================
+// ヘルスチェック / keepalive (cron-job.org からの定期 GET 用)
+// ============================================================
+app.get('/', (req, res) => res.status(200).send('ok'));
+app.get('/healthz', (req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
+
+// ============================================================
 // LINE Webhook (グループID取得用)
 // ============================================================
 app.post('/webhook', middleware(config), async (req, res) => {

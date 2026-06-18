@@ -573,6 +573,11 @@ function decideShifts(year, month, validDates, responses) {
       return d !== 0 ? d : Math.random() - 0.5;
     });
     const beg = cands[0];
+    // 1スロット3人を超えないかチェック
+    const wouldExceedCap = (slots) => slots.some(s => {
+      const current = (assignments[`${ds}_${s}`] || []).length;
+      return current + 1 > 3;
+    });
     if (date.getDay() === 6) {
       const amOk = isAvailableAt(beg, ds, 'am');
       const noonOk = isAvailableAt(beg, ds, 'noon');
@@ -591,9 +596,11 @@ function decideShifts(year, month, validDates, responses) {
         if (aIsAmOnly !== bIsAmOnly) return aIsAmOnly ? 1 : -1;
         return Math.random() - 0.5;
       });
-      combos[0].forEach(s => record(beg, date, s));
+      // 3人を超えないコンボを優先順から探す
+      const chosen = combos.find(c => !wouldExceedCap(c));
+      if (chosen) chosen.forEach(s => record(beg, date, s));
     } else {
-      record(beg, date, 'pm');
+      if (!wouldExceedCap(['pm'])) record(beg, date, 'pm');
     }
   };
 
